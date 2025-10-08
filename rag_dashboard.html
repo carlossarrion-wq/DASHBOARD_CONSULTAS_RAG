@@ -1,0 +1,757 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RAG Query Monitoring Dashboard</title>
+    
+    <!-- AWS Amazon Ember Font -->
+    <link rel="preconnect" href="https://d1tzzh0q3mh5bp.cloudfront.net">
+    <link href="https://d1tzzh0q3mh5bp.cloudfront.net/fonts/amazon-ember/amazon-ember.css" rel="stylesheet">
+    
+    <!-- External Libraries -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/moment@2.29.1/moment.min.js"></script>
+    
+    <link rel="stylesheet" href="css/dashboard.css">
+</head>
+<body>
+    <!-- Connection Status Indicator -->
+    <div id="connection-status" class="connection-status disconnected">
+        🔴 Disconnected from Data Source
+    </div>
+
+    <div class="header">
+        <h1>RAG Query Monitoring Dashboard</h1>
+        <p>Real-time monitoring and analysis of RAG system queries</p>
+        <button onclick="logout()">Logout</button>
+    </div>
+
+    <div class="container">
+        <div class="tab-container">
+            <div class="tab-buttons">
+                <button class="tab-button active" onclick="showTab('user-requests-tab')">
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" style="width: 20px; height: 20px; margin-right: 8px;">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0A17.933 17.933 0 0112 21.75c-2.676 0-5.216-.584-7.499-1.632z" />
+                    </svg>
+                    User Requests
+                </button>
+                <button class="tab-button" onclick="showTab('team-requests-tab')">
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" style="width: 20px; height: 20px; margin-right: 8px;">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M15 19.128a9.38 9.38 0 002.625.372 9.337 9.337 0 004.121-.952 4.125 4.125 0 00-7.533-2.493M15 19.128v-.003c0-1.113-.285-2.16-.786-3.07M15 19.128v.106A12.318 12.318 0 018.624 21c-2.331 0-4.512-.645-6.374-1.766l-.001-.109a6.375 6.375 0 0111.964-3.07M12 6.375a3.375 3.375 0 11-6.75 0 3.375 3.375 0 016.75 0zm8.25 2.25a2.625 2.625 0 11-5.25 0 2.625 2.625 0 015.25 0z" />
+                    </svg>
+                    Team Requests
+                </button>
+                <button class="tab-button" onclick="showTab('requests-details-tab')">
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" style="width: 20px; height: 20px; margin-right: 8px;">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M9 12h3.75M9 15h3.75M9 18h3.75m3 .75H18a2.25 2.25 0 002.25-2.25V6.108c0-1.135-.845-2.098-1.976-2.192a48.424 48.424 0 00-1.123-.08m-5.801 0c-.065.21-.1.433-.1.664 0 .414.336.75.75.75h4.5a.75.75 0 00.75-.75 2.25 2.25 0 00-.1-.664m-5.8 0A2.251 2.251 0 0113.5 2.25H15c1.012 0 1.867.668 2.15 1.586m-5.8 0c-.376.023-.75.05-1.124.08C9.095 4.01 8.25 4.973 8.25 6.108V8.25m0 0H4.875c-.621 0-1.125.504-1.125 1.125v11.25c0 .621.504 1.125 1.125 1.125h9.75c.621 0 1.125-.504 1.125-1.125V9.375c0-.621-.504-1.125-1.125-1.125H8.25zM6.75 12h.008v.008H6.75V12zm0 3h.008v.008H6.75V15zm0 3h.008v.008H6.75V18z" />
+                    </svg>
+                    Requests Details
+                </button>
+                <button class="tab-button" onclick="showTab('requests-history-tab')">
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" style="width: 20px; height: 20px; margin-right: 8px;">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                    Requests History
+                </button>
+            </div>
+            
+            <!-- User Requests Tab -->
+            <div id="user-requests-tab" class="tab-content active">
+                <div class="section-header">
+                    <h2>User Requests</h2>
+                    <button class="refresh-button" onclick="loadDashboardData()" title="Refresh Data">
+                        <span class="refresh-icon">&#x21bb;</span>
+                        Refresh
+                    </button>
+                </div>
+                
+                <!-- Top Row: Quadrant Layout -->
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 2rem; margin-bottom: 2rem;">
+                    <!-- Top-Left Quadrant: 4 Key Metrics (2x2 grid) -->
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
+                        <div class="metric-card">
+                            <h3>Total Queries</h3>
+                            <div class="metric-value" id="user-total-queries-today">-</div>
+                            <div class="metric-change positive" id="user-queries-change">
+                                <span>↗</span> Loading...
+                            </div>
+                            <div class="metric-subtitle">Today</div>
+                        </div>
+                        
+                        <div class="metric-card">
+                            <h3>Active Users</h3>
+                            <div class="metric-value" id="user-active-users">-</div>
+                            <div class="metric-change positive" id="user-users-change">
+                                <span>↗</span> Loading...
+                            </div>
+                            <div class="metric-subtitle">Today</div>
+                        </div>
+                        
+                        <div class="metric-card">
+                            <h3>Avg Queries/User</h3>
+                            <div class="metric-value" id="user-avg-queries">-</div>
+                            <div class="metric-change" id="user-avg-change">
+                                <span>-</span> Loading...
+                            </div>
+                            <div class="metric-subtitle">Active users today</div>
+                        </div>
+                        
+                        <div class="metric-card">
+                            <h3>Avg Response Time</h3>
+                            <div class="metric-value" id="user-avg-response-time">-</div>
+                            <div class="metric-change" id="user-response-change">
+                                <span>-</span> Loading...
+                            </div>
+                            <div class="metric-subtitle">Seconds</div>
+                        </div>
+                    </div>
+                    
+                    <!-- Top-Right Quadrant: Hourly Usage Histogram -->
+                    <div class="card">
+                        <h2>Hourly Query Volume Today</h2>
+                        <div style="height: 300px; position: relative;">
+                            <canvas id="hourly-histogram-chart"></canvas>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Bottom Row: Alerts and User Histogram -->
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 2rem; margin-bottom: 2rem;">
+                    <!-- Bottom-Left: Alerts -->
+                    <div class="card">
+                        <h2>User Query Alerts</h2>
+                        <div id="user-alerts-container">
+                            <div class="alert info">
+                                <div class="loading-spinner"></div>
+                                <strong>Connecting:</strong> Establishing connection to data source...
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Bottom-Right: Histogram per User -->
+                    <div class="card">
+                        <h2>Query Distribution by User</h2>
+                        <div style="height: 300px; position: relative;">
+                            <canvas id="user-distribution-histogram"></canvas>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="card" style="margin-top: 20px; position: relative;">
+                    <h2>User Query Details</h2>
+                    <button class="export-button" onclick="exportUserQueryTable()" title="Export to CSV">
+                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" style="width: 16px; height: 16px;">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3" />
+                        </svg>
+                        Export
+                    </button>
+                    
+                    <!-- Pagination Controls -->
+                    <div class="pagination-controls">
+                        <div class="pagination-info">
+                            <span id="user-query-info">Showing 0-0 of 0 users</span>
+                        </div>
+                        <div class="pagination-buttons">
+                            <button id="prev-user-query-btn" class="btn" onclick="loadPreviousUserQueryPage()" disabled>
+                                ←
+                            </button>
+                            <span id="user-query-page-info">Page 1</span>
+                            <button id="next-user-query-btn" class="btn" onclick="loadNextUserQueryPage()" disabled>
+                                →
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <table id="user-query-table">
+                        <thead>
+                            <tr>
+                                <th>User</th>
+                                <th>Name</th>
+                                <th>Team</th>
+                                <th>Daily Queries</th>
+                                <th>Daily Limit</th>
+                                <th>Daily Usage</th>
+                                <th>Monthly Queries</th>
+                                <th>Monthly Limit</th>
+                                <th>Monthly Usage</th>
+                                <th>Avg Response Time</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td colspan="10">
+                                    <div class="loading-spinner"></div>
+                                    Loading user data...
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+                
+                <div class="dashboard" style="margin-top: 20px;">
+                    <div class="card">
+                        <h2>User Daily Queries</h2>
+                        <div class="chart-container">
+                            <canvas id="user-daily-chart"></canvas>
+                        </div>
+                    </div>
+                    
+                    <div class="card">
+                        <h2>Model Usage Distribution Today</h2>
+                        <div class="chart-container">
+                            <canvas id="model-usage-distribution-chart"></canvas>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Team Requests Tab -->
+            <div id="team-requests-tab" class="tab-content">
+                <div class="section-header">
+                    <h2>Team Requests</h2>
+                    <button class="refresh-button" onclick="loadDashboardData()" title="Refresh Data">
+                        <span class="refresh-icon">&#x21bb;</span>
+                        Refresh
+                    </button>
+                </div>
+                
+                <div class="dashboard">
+                    <div class="card">
+                        <h2>Team Query Alerts</h2>
+                        <div id="team-alerts-container">
+                            <div class="alert info">
+                                <div class="loading-spinner"></div>
+                                <strong>Loading:</strong> Fetching team data...
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="card">
+                        <h2>Team Monthly Queries</h2>
+                        <div class="chart-container">
+                            <canvas id="team-monthly-chart"></canvas>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="dashboard" style="margin-top: 20px;">
+                    <div class="card" style="position: relative;">
+                        <h2>Team Query Details</h2>
+                        <button class="export-button" onclick="exportTeamQueryTable()" title="Export to CSV">
+                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" style="width: 16px; height: 16px;">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3" />
+                            </svg>
+                            Export
+                        </button>
+                        <table id="team-query-table">
+                            <thead>
+                                <tr>
+                                    <th>Team</th>
+                                    <th>Daily Queries</th>
+                                    <th>Daily Usage</th>
+                                    <th>Monthly Queries</th>
+                                    <th>Monthly Usage</th>
+                                    <th>Avg Response Time</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td colspan="6">
+                                        <div class="loading-spinner"></div>
+                                        Loading team data...
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                    
+                    <div class="card" style="position: relative;">
+                        <h2>Users in Team</h2>
+                        <button class="export-button" onclick="exportTeamUsersTable()" title="Export to CSV">
+                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" style="width: 16px; height: 16px;">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3" />
+                            </svg>
+                            Export
+                        </button>
+                        
+                        <!-- Pagination Controls -->
+                        <div class="pagination-controls">
+                            <div class="pagination-info">
+                                <span id="team-users-info">Showing 0-0 of 0 users</span>
+                            </div>
+                            <div class="pagination-buttons">
+                                <button id="prev-team-users-btn" class="btn" onclick="loadPreviousTeamUsersPage()" disabled>
+                                    ←
+                                </button>
+                                <span id="team-users-page-info">Page 1</span>
+                                <button id="next-team-users-btn" class="btn" onclick="loadNextTeamUsersPage()" disabled>
+                                    →
+                                </button>
+                            </div>
+                        </div>
+                        
+                        <table id="team-users-table">
+                            <thead>
+                                <tr>
+                                    <th>User</th>
+                                    <th>Name</th>
+                                    <th>Team</th>
+                                    <th>Monthly Queries</th>
+                                    <th>% of Team Usage</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td colspan="5">
+                                        <div class="loading-spinner"></div>
+                                        Loading team users...
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+                
+                <div class="dashboard" style="margin-top: 20px;">
+                    <div class="card">
+                        <h2>Team Daily Queries</h2>
+                        <div class="chart-container">
+                            <canvas id="team-daily-chart"></canvas>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Requests Details Tab -->
+            <div id="requests-details-tab" class="tab-content">
+                <div class="section-header">
+                    <h2>Requests Details</h2>
+                    <button class="refresh-button" onclick="refreshRequestsDetails()" title="Refresh Data">
+                        <span class="refresh-icon">&#x21bb;</span>
+                        Refresh
+                    </button>
+                </div>
+                
+                <div class="card" style="margin-top: 20px;">
+                    <h2>Daily Query Trend - Last 10 Days</h2>
+                    <div class="chart-container">
+                        <canvas id="requests-details-chart"></canvas>
+                    </div>
+                </div>
+                
+                <div class="card" style="margin-top: 20px; position: relative;">
+                    <h2>User Queries - Last 10 Days</h2>
+                    <button class="export-button" onclick="exportRequestsDetailsTable()" title="Export to CSV">
+                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" style="width: 16px; height: 16px;">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3" />
+                        </svg>
+                        Export
+                    </button>
+                    
+                    <!-- Pagination Controls -->
+                    <div class="pagination-controls">
+                        <div class="pagination-info">
+                            <span id="requests-details-info">Showing 0-0 of 0 users</span>
+                        </div>
+                        <div class="pagination-buttons">
+                            <button id="prev-requests-details-btn" class="btn" onclick="loadPreviousRequestsDetailsPage()" disabled>
+                                ←
+                            </button>
+                            <span id="requests-details-page-info">Page 1</span>
+                            <button id="next-requests-details-btn" class="btn" onclick="loadNextRequestsDetailsPage()" disabled>
+                                →
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <table id="requests-details-table">
+                        <thead>
+                            <tr>
+                                <th>User</th>
+                                <th>Name</th>
+                                <th>Team</th>
+                                <th id="day-9">Day -9</th>
+                                <th id="day-8">Day -8</th>
+                                <th id="day-7">Day -7</th>
+                                <th id="day-6">Day -6</th>
+                                <th id="day-5">Day -5</th>
+                                <th id="day-4">Day -4</th>
+                                <th id="day-3">Day -3</th>
+                                <th id="day-2">Day -2</th>
+                                <th id="day-1">Day -1</th>
+                                <th id="day-0">Today</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td colspan="13">
+                                    <div class="loading-spinner"></div>
+                                    Loading requests details...
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+                
+                <div class="card" style="margin-top: 20px; position: relative;">
+                    <h2>Model Usage by Team - Last 10 Days</h2>
+                    <button class="export-button" onclick="exportModelUsageTable()" title="Export to CSV">
+                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" style="width: 16px; height: 16px;">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3" />
+                        </svg>
+                        Export
+                    </button>
+                    <table id="model-usage-table">
+                        <thead>
+                            <tr>
+                                <th>MODEL</th>
+                                <th>Engineering</th>
+                                <th>Data Science</th>
+                                <th>Product</th>
+                                <th>Research</th>
+                                <th>Operations</th>
+                                <th>TOTAL</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td colspan="7">
+                                    <div class="loading-spinner"></div>
+                                    Loading model usage data...
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+                
+                <div class="card" style="margin-top: 20px;">
+                    <h2>Model Consumption Evolution - Last 10 Days</h2>
+                    <div class="chart-container">
+                        <canvas id="model-consumption-evolution-chart"></canvas>
+                    </div>
+                </div>
+                
+                <div class="card" style="margin-top: 20px;">
+                    <h2>Response Time Evolution - Last 10 Days</h2>
+                    <div class="chart-container">
+                        <canvas id="response-time-evolution-chart"></canvas>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Requests History Tab -->
+            <div id="requests-history-tab" class="tab-content">
+                <div class="section-header">
+                    <h2>Requests History</h2>
+                    <button class="refresh-button" onclick="refreshRequestsHistory()" title="Refresh Data">
+                        <span class="refresh-icon">&#x21bb;</span>
+                        Refresh
+                    </button>
+                </div>
+                
+                <!-- Filters Section -->
+                <div class="filters-section">
+                    <div class="filters-grid">
+                        <div class="filter-group">
+                            <label for="filter-search">Búsqueda</label>
+                            <input type="text" id="filter-search" placeholder="Buscar en queries...">
+                        </div>
+                        
+                        <div class="filter-group">
+                            <label for="filter-person">Persona</label>
+                            <select id="filter-person">
+                                <option value="">Todos</option>
+                            </select>
+                        </div>
+                        
+                        <div class="filter-group">
+                            <label for="filter-team">Equipo</label>
+                            <select id="filter-team">
+                                <option value="">Todos</option>
+                            </select>
+                        </div>
+                        
+                        <div class="filter-group">
+                            <label for="filter-model">Modelo</label>
+                            <select id="filter-model">
+                                <option value="">Todos</option>
+                            </select>
+                        </div>
+                        
+                        <div class="filter-group">
+                            <label for="filter-kb">Knowledge Base</label>
+                            <select id="filter-kb">
+                                <option value="">Todos</option>
+                            </select>
+                        </div>
+                        
+                        <div class="filter-group">
+                            <label for="filter-status">Estado</label>
+                            <select id="filter-status">
+                                <option value="">Todos</option>
+                                <option value="COMPLETED">COMPLETED</option>
+                                <option value="ERROR">ERROR</option>
+                            </select>
+                        </div>
+                        
+                        <div class="filter-group">
+                            <label for="filter-start-date">Fecha Inicio</label>
+                            <input type="datetime-local" id="filter-start-date">
+                        </div>
+                        
+                        <div class="filter-group">
+                            <label for="filter-end-date">Fecha Fin</label>
+                            <input type="datetime-local" id="filter-end-date">
+                        </div>
+                    </div>
+                    
+                    <div class="filter-buttons">
+                        <button class="clear-btn" onclick="clearFilters()">Limpiar Filtros</button>
+                        <button class="apply-btn" onclick="applyFilters()">Aplicar Filtros</button>
+                    </div>
+                </div>
+                
+                <!-- Query Logs Table -->
+                <div class="card" style="margin-top: 20px; position: relative;">
+                    <h2>Query Logs</h2>
+                    <button class="export-button" onclick="exportQueryLogsTable()" title="Export to CSV">
+                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" style="width: 16px; height: 16px;">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3" />
+                        </svg>
+                        Export
+                    </button>
+                    
+                    <!-- Pagination Controls -->
+                    <div class="pagination-controls">
+                        <div class="pagination-info">
+                            <span id="query-logs-info">Showing 0-0 of 0 logs</span>
+                        </div>
+                        <div class="pagination-buttons">
+                            <button id="prev-query-logs-btn" class="btn" onclick="loadPreviousQueryLogsPage()" disabled>
+                                ←
+                            </button>
+                            <span id="query-logs-page-info">Page 1</span>
+                            <button id="next-query-logs-btn" class="btn" onclick="loadNextQueryLogsPage()" disabled>
+                                →
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <table id="query-logs-table">
+                        <thead>
+                            <tr style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white;">
+                                <th>FECHA</th>
+                                <th>PERSONA</th>
+                                <th>EQUIPO</th>
+                                <th>QUERY</th>
+                                <th>ESTADO</th>
+                                <th>TOKENS</th>
+                                <th>TIEMPO</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td colspan="7">
+                                    <div class="loading-spinner"></div>
+                                    Loading query logs...
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal for Query Details -->
+    <div id="query-detail-modal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Detalle de la Consulta</h2>
+                <button class="modal-close" onclick="closeQueryDetailModal()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <!-- User Information Section -->
+                <div class="modal-section">
+                    <h3 class="modal-section-title">Información del Usuario</h3>
+                    <div class="modal-info-grid">
+                        <div class="modal-info-item">
+                            <span class="modal-label">Query ID:</span>
+                            <span class="modal-value" id="modal-query-id">-</span>
+                        </div>
+                        <div class="modal-info-item">
+                            <span class="modal-label">Conversation ID:</span>
+                            <span class="modal-value" id="modal-conversation-id">-</span>
+                        </div>
+                        <div class="modal-info-item">
+                            <span class="modal-label">IAM Username:</span>
+                            <span class="modal-value" id="modal-iam-username">-</span>
+                        </div>
+                        <div class="modal-info-item">
+                            <span class="modal-label">IAM User ARN:</span>
+                            <span class="modal-value" id="modal-iam-user-arn">-</span>
+                        </div>
+                        <div class="modal-info-item">
+                            <span class="modal-label">IAM Group:</span>
+                            <span class="modal-value" id="modal-iam-group">-</span>
+                        </div>
+                        <div class="modal-info-item">
+                            <span class="modal-label">Persona:</span>
+                            <span class="modal-value" id="modal-person">-</span>
+                        </div>
+                        <div class="modal-info-item">
+                            <span class="modal-label">Equipo:</span>
+                            <span class="modal-value" id="modal-team">-</span>
+                        </div>
+                        <div class="modal-info-item">
+                            <span class="modal-label">Estado:</span>
+                            <span class="modal-value" id="modal-status">-</span>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Query and Response Section -->
+                <div class="modal-section">
+                    <h3 class="modal-section-title">Query del Usuario</h3>
+                    <div class="modal-query-box" id="modal-user-query">-</div>
+                    
+                    <h3 class="modal-section-title" style="margin-top: 1rem;">Respuesta del LLM</h3>
+                    <div class="modal-conversation-box" id="modal-llm-response">-</div>
+                </div>
+                
+                <!-- Statistics Section -->
+                <div class="modal-section">
+                    <h3 class="modal-section-title">Estadísticas de Contenido</h3>
+                    <div class="modal-stats-grid">
+                        <div class="modal-stat-card">
+                            <div class="modal-stat-label">Palabras Query</div>
+                            <div class="modal-stat-value" id="modal-query-word-count">-</div>
+                        </div>
+                        <div class="modal-stat-card">
+                            <div class="modal-stat-label">Caracteres Query</div>
+                            <div class="modal-stat-value" id="modal-query-char-count">-</div>
+                        </div>
+                        <div class="modal-stat-card">
+                            <div class="modal-stat-label">Palabras Respuesta</div>
+                            <div class="modal-stat-value" id="modal-response-word-count">-</div>
+                        </div>
+                        <div class="modal-stat-card">
+                            <div class="modal-stat-label">Caracteres Respuesta</div>
+                            <div class="modal-stat-value" id="modal-response-char-count">-</div>
+                        </div>
+                        <div class="modal-stat-card">
+                            <div class="modal-stat-label">Tokens Utilizados</div>
+                            <div class="modal-stat-value" id="modal-tokens-used">-</div>
+                        </div>
+                        <div class="modal-stat-card">
+                            <div class="modal-stat-label">Documentos Recuperados</div>
+                            <div class="modal-stat-value" id="modal-retrieved-docs">-</div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Performance Metrics Section -->
+                <div class="modal-section">
+                    <h3 class="modal-section-title">Métricas de Rendimiento</h3>
+                    <div class="modal-info-grid">
+                        <div class="modal-info-item">
+                            <span class="modal-label">Request Timestamp:</span>
+                            <span class="modal-value" id="modal-request-timestamp">-</span>
+                        </div>
+                        <div class="modal-info-item">
+                            <span class="modal-label">Response Timestamp:</span>
+                            <span class="modal-value" id="modal-response-timestamp">-</span>
+                        </div>
+                        <div class="modal-info-item">
+                            <span class="modal-label">Processing Time:</span>
+                            <span class="modal-value" id="modal-processing-time">-</span>
+                        </div>
+                        <div class="modal-info-item">
+                            <span class="modal-label">Vector DB Time:</span>
+                            <span class="modal-value" id="modal-vector-db-time">-</span>
+                        </div>
+                        <div class="modal-info-item">
+                            <span class="modal-label">LLM Processing Time:</span>
+                            <span class="modal-value" id="modal-llm-processing-time">-</span>
+                        </div>
+                        <div class="modal-info-item">
+                            <span class="modal-label">Retrieval Only:</span>
+                            <span class="modal-value" id="modal-retrieval-only">-</span>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Technical Details Section -->
+                <div class="modal-section">
+                    <h3 class="modal-section-title">Detalles Técnicos</h3>
+                    <div class="modal-info-grid">
+                        <div class="modal-info-item">
+                            <span class="modal-label">Model ID:</span>
+                            <span class="modal-value" id="modal-model-id">-</span>
+                        </div>
+                        <div class="modal-info-item">
+                            <span class="modal-label">Knowledge Base ID:</span>
+                            <span class="modal-value" id="modal-kb-id">-</span>
+                        </div>
+                        <div class="modal-info-item">
+                            <span class="modal-label">Lambda Request ID:</span>
+                            <span class="modal-value" id="modal-lambda-request-id">-</span>
+                        </div>
+                        <div class="modal-info-item">
+                            <span class="modal-label">API Gateway Request ID:</span>
+                            <span class="modal-value" id="modal-api-gateway-request-id">-</span>
+                        </div>
+                        <div class="modal-info-item">
+                            <span class="modal-label">Source IP:</span>
+                            <span class="modal-value" id="modal-source-ip">-</span>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Error Section -->
+                <div class="modal-section" id="modal-error-section" style="display: none;">
+                    <h3 class="modal-section-title" style="color: #c53030;">Error</h3>
+                    <div class="modal-error-box" id="modal-error-message">-</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Dashboard JavaScript -->
+    <script src="js/config.js"></script>
+    <script src="js/data-service.js"></script>
+    <script src="js/charts.js"></script>
+    <script src="js/dashboard.js"></script>
+    
+    <script>
+        // Utility function to generate percentage indicators
+        function createPercentageIndicator(percentage, includeText = true) {
+            const numericValue = typeof percentage === 'string' ? 
+                parseFloat(percentage.replace('%', '')) : percentage;
+            
+            let cssClass = 'percentage-indicator ';
+            
+            if (numericValue === 0) {
+                cssClass += 'zero';
+            } else if (numericValue === 100) {
+                cssClass += 'full';
+            } else if (numericValue > 0 && numericValue <= 25) {
+                cssClass += 'low';
+            } else if (numericValue > 25 && numericValue <= 50) {
+                cssClass += 'medium-low';
+            } else if (numericValue > 50 && numericValue <= 75) {
+                cssClass += 'medium';
+            } else if (numericValue > 75 && numericValue <= 90) {
+                cssClass += 'high';
+            } else if (numericValue > 90) {
+                cssClass += 'critical';
+            }
+            
+            return `<span class="${cssClass}" data-percentage="${numericValue}%" title="Usage: ${numericValue}%" style="--fill-width: ${numericValue}%"></span>`;
+        }
+        
+        window.createPercentageIndicator = createPercentageIndicator;
+    </script>
+</body>
+</html>
