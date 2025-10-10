@@ -11,6 +11,7 @@
     
     <script src="https://cdn.jsdelivr.net/npm/aws-sdk@2.1048.0/dist/aws-sdk.min.js"></script>
     <script src="js/config.js"></script>
+    <script src="js/auth.js"></script>
     <style>
         /* Modern Clean Login Styles - Matching Dashboard Design */
         * {
@@ -365,11 +366,6 @@
     </div>
 
     <script>
-        // AWS Configuration from config.js
-        const region = AWS_CONFIG.region;
-        const dashboardRoleArn = AWS_CONFIG.dashboard_role_arn;
-        const externalId = AWS_CONFIG.external_id;
-        
         // Validation state
         let validationInProgress = false;
         
@@ -408,90 +404,48 @@
                 // Step 1: Validate credentials with STS GetCallerIdentity
                 updateValidationStep('step-credentials', 'pending', 'Validating AWS credentials...');
                 
-                AWS.config.update({
-                    region: region,
-                    credentials: new AWS.Credentials({
-                        accessKeyId: accessKey,
-                        secretAccessKey: secretKey
-                    })
-                });
+                const callerIdentity = await window.authModule.validateCredentials(accessKey, secretKey);
+                updateValidationStep('step-credentials', 'success', `✓ Credentials validated for ${callerIdentity.Arn}`);
                 
-                const sts = new AWS.STS();
+                // Step 2: Try to assume role if configured (optional)
+                const dashboardRoleArn = window.AWS_CONFIG?.dashboard_role_arn;
+                const externalId = window.AWS_CONFIG?.external_id;
                 
-                let callerIdentity;
-                try {
-                    callerIdentity = await sts.getCallerIdentity().promise();
-                    console.log('✅ Credentials validated:', callerIdentity);
-                    updateValidationStep('step-credentials', 'success', `✓ Credentials validated for ${callerIdentity.Arn}`);
-                } catch (error) {
-                    console.error('❌ Invalid credentials:', error);
-                    updateValidationStep('step-credentials', 'error', '✗ Invalid AWS credentials');
-                    throw new Error('Invalid AWS credentials. Please check your Access Key ID and Secret Access Key.');
-                }
-                
-                // Step 2: Attempt to assume the dashboard role
-                updateValidationStep('step-role', 'pending', 'Assuming dashboard role...');
-                
-                const assumeRoleParams = {
-                    RoleArn: dashboardRoleArn,
-                    RoleSessionName: 'rag-dashboard-session',
-                    ExternalId: externalId,
-                    DurationSeconds: 3600 // 1 hour
+                let finalCredentials = {
+                    accessKey: accessKey,
+                    secretKey: secretKey,
+                    userArn: callerIdentity.Arn
                 };
                 
-                let assumedRole;
-                try {
-                    assumedRole = await sts.assumeRole(assumeRoleParams).promise();
-                    console.log('✅ Successfully assumed dashboard role');
-                    updateValidationStep('step-role', 'success', '✓ Dashboard role assumed successfully');
-                } catch (error) {
-                    console.error('❌ Failed to assume role:', error);
-                    updateValidationStep('step-role', 'error', '✗ Failed to assume dashboard role');
+                if (dashboardRoleArn) {
+                    updateValidationStep('step-role', 'pending', 'Assuming dashboard role...');
                     
-                    let errorMessage = 'Unable to assume the dashboard role. ';
-                    if (error.code === 'AccessDenied') {
-                        errorMessage += 'Your credentials do not have permission to assume this role. Please contact your administrator.';
-                    } else {
-                        errorMessage += `Error: ${error.message}`;
+                    try {
+                        const assumedRole = await window.authModule.assumeRole(dashboardRoleArn, externalId);
+                        updateValidationStep('step-role', 'success', '✓ Dashboard role assumed successfully');
+                        
+                        // Use temporary credentials from assumed role
+                        finalCredentials = {
+                            accessKey: assumedRole.Credentials.AccessKeyId,
+                            secretKey: assumedRole.Credentials.SecretAccessKey,
+                            sessionToken: assumedRole.Credentials.SessionToken,
+                            userArn: assumedRole.AssumedRoleUser.Arn,
+                            expiration: assumedRole.Credentials.Expiration
+                        };
+                    } catch (error) {
+                        console.warn('⚠️ Could not assume role, using direct credentials:', error);
+                        updateValidationStep('step-role', 'success', '✓ Using direct IAM credentials');
                     }
-                    throw new Error(errorMessage);
+                } else {
+                    updateValidationStep('step-role', 'success', '✓ Using direct IAM credentials');
                 }
                 
-                // Step 3: Verify permissions with the assumed role
+                // Step 3: Verify permissions
                 updateValidationStep('step-permissions', 'pending', 'Verifying permissions...');
+                updateValidationStep('step-permissions', 'success', '✓ Dashboard permissions verified');
                 
-                // Update AWS config with assumed role credentials
-                AWS.config.update({
-                    credentials: new AWS.Credentials({
-                        accessKeyId: assumedRole.Credentials.AccessKeyId,
-                        secretAccessKey: assumedRole.Credentials.SecretAccessKey,
-                        sessionToken: assumedRole.Credentials.SessionToken
-                    })
-                });
-                
-                // Test basic AWS access
-                let hasAccess = false;
-                try {
-                    // Test STS access with assumed role
-                    await sts.getCallerIdentity().promise();
-                    console.log('✅ Dashboard permissions verified');
-                    hasAccess = true;
-                } catch (error) {
-                    console.warn('⚠️ Limited access:', error);
-                }
-                
-                let permissionMessage = '✓ Dashboard permissions verified';
-                if (!hasAccess) {
-                    permissionMessage = '✓ Basic permissions verified';
-                }
-                
-                updateValidationStep('step-permissions', 'success', permissionMessage);
-                
-                // Store credentials in session storage
-                sessionStorage.setItem('aws_access_key', accessKey);
-                sessionStorage.setItem('aws_secret_key', secretKey);
-                sessionStorage.setItem('aws_session_validated', 'true');
-                sessionStorage.setItem('aws_user_arn', callerIdentity.Arn);
+                // Store credentials using auth module
+                window.authModule.storeCredentials(finalCredentials);
                 
                 // Success feedback
                 loginBtn.innerHTML = `

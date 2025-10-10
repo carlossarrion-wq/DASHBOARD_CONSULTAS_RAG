@@ -719,10 +719,69 @@
     </div>
 
     <!-- Dashboard JavaScript -->
+    <script src="https://cdn.jsdelivr.net/npm/aws-sdk@2.1048.0/dist/aws-sdk.min.js"></script>
     <script src="js/config.js"></script>
+    <script src="js/auth.js"></script>
     <script src="js/data-service.js"></script>
     <script src="js/charts.js"></script>
     <script src="js/dashboard.js"></script>
+    
+    <script>
+        // Session validation - runs before anything else
+        (function() {
+            'use strict';
+            
+            console.log('🔐 Checking authentication...');
+            
+            // Require authentication before loading dashboard
+            if (!window.authModule || !window.authModule.isAuthenticated()) {
+                console.warn('⚠️ No valid session found - redirecting to login');
+                window.location.href = 'login.html?error=no_credentials';
+                return;
+            }
+            
+            console.log('✅ Session validated');
+            
+            // Configure AWS SDK with stored credentials
+            const configured = window.authModule.configureAWS();
+            if (!configured) {
+                console.error('❌ Failed to configure AWS SDK');
+                window.location.href = 'login.html?error=invalid_session';
+                return;
+            }
+            
+            // Display user info in console
+            const user = window.authModule.getCurrentUser();
+            if (user) {
+                console.log('👤 Logged in as:', user.arn);
+                const timeRemaining = window.authModule.getSessionTimeRemaining();
+                if (timeRemaining !== null) {
+                    console.log('⏱️ Session time remaining:', timeRemaining, 'minutes');
+                }
+            }
+            
+            // Set up session timeout warning
+            const timeRemaining = window.authModule.getSessionTimeRemaining();
+            if (timeRemaining !== null && timeRemaining < 10) {
+                console.warn('⚠️ Session will expire in', timeRemaining, 'minutes');
+            }
+            
+            // Check session periodically (every 5 minutes)
+            setInterval(function() {
+                if (!window.authModule.isAuthenticated()) {
+                    console.warn('⚠️ Session expired - redirecting to login');
+                    alert('Your session has expired. Please login again.');
+                    window.authModule.logout('login.html');
+                }
+                
+                const remaining = window.authModule.getSessionTimeRemaining();
+                if (remaining !== null && remaining <= 5 && remaining > 0) {
+                    console.warn('⚠️ Session expiring soon:', remaining, 'minutes remaining');
+                }
+            }, 5 * 60 * 1000); // Check every 5 minutes
+            
+        })();
+    </script>
     
     <script>
         // Utility function to generate percentage indicators

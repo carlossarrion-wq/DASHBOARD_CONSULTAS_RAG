@@ -1,5 +1,16 @@
 // RAG Query Monitoring Dashboard Configuration
 
+// AWS Configuration
+const AWS_CONFIG = {
+    region: 'eu-west-1',
+    account_id: 'iberdrola-aws',
+    // Optional: Role ARN if you need AssumeRole
+    dashboard_role_arn: null,
+    external_id: null,
+    // Session timeout in minutes (default: 60 minutes)
+    session_timeout: 60
+};
+
 // Chart color schemes
 const CHART_COLORS = {
     primary: [
@@ -12,13 +23,10 @@ const CHART_COLORS = {
     ]
 };
 
-// Sample teams configuration (replace with your actual teams)
+// Teams configuration (from database)
 const ALL_TEAMS = [
-    'Engineering',
-    'Data Science',
-    'Product',
-    'Research',
-    'Operations'
+    'Darwin',
+    'team_sdlc_group'
 ];
 
 // Sample query types
@@ -50,6 +58,7 @@ const DEFAULT_QUOTA_CONFIG = {
 };
 
 // Make configurations globally available
+window.AWS_CONFIG = AWS_CONFIG;
 window.CHART_COLORS = CHART_COLORS;
 window.ALL_TEAMS = ALL_TEAMS;
 window.QUERY_TYPES = QUERY_TYPES;

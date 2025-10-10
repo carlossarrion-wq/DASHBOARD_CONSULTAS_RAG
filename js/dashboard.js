@@ -186,15 +186,22 @@ function loadUserDailyChart() {
     }
     
     const datasets = [];
-    allUsers.slice(0, 5).forEach((user, index) => {
+    
+    // Filter out null/undefined users and limit to 5
+    const validUsers = allUsers.filter(user => user != null).slice(0, 5);
+    
+    validUsers.forEach((user, index) => {
         const dailyData = userMetrics[user]?.daily || Array(11).fill(0);
         const chartData = dailyData.slice(1, 11); // Last 10 days
         
+        // Get user display name (handle cases where user might not have @ symbol)
+        const displayName = user.includes('@') ? user.split('@')[0] : user;
+        
         datasets.push({
-            label: user.split('@')[0],
+            label: displayName,
             data: chartData,
-            borderColor: CHART_COLORS.primary[index],
-            backgroundColor: CHART_COLORS.primary[index] + '33',
+            borderColor: CHART_COLORS.primary[index % CHART_COLORS.primary.length],
+            backgroundColor: CHART_COLORS.primary[index % CHART_COLORS.primary.length] + '33',
             tension: 0.4,
             fill: true
         });
@@ -677,63 +684,201 @@ function loadNextRequestsDetailsPage() {
     }
 }
 
-function loadModelUsageTable() {
-    const tableBody = document.querySelector('#model-usage-table tbody');
+async function loadModelUsageTable() {
+    const table = document.getElementById('model-usage-table');
+    const tableHead = table.querySelector('thead');
+    const tableBody = table.querySelector('tbody');
+    
     tableBody.innerHTML = '';
     
-    // Define models
-    const models = [
-        'eu.anthropic.claude-sonnet-4-20250514-v1:0',
-        'eu.anthropic.claude-sonnet-4-5-20250929-v1:0',
-        'eu.anthropic.claude-3-7-sonnet-20250219-v1:0',
-        'anthropic.claude-sonnet-4-20250514-v1:0',
-        'anthropic.claude-3-sonnet-20240229-v1:0'
-    ];
-    
-    let totalRow = Array(ALL_TEAMS.length).fill(0);
-    
-    // Generate data for each model (row)
-    models.forEach(model => {
-        let rowHtml = `<tr><td>${model}</td>`;
-        let rowTotal = 0;
+    try {
+        // Get real data from query logs
+        const queryLogs = await window.dataService.getQueryLogs({ limit: 1000 });
         
-        // Generate usage for each team (column)
-        ALL_TEAMS.forEach((team, index) => {
-            const usage = Math.floor(Math.random() * 500);
-            rowHtml += `<td>${usage}</td>`;
-            rowTotal += usage;
-            totalRow[index] += usage;
+        // Count usage by model and team
+        const modelTeamUsage = {};
+        const allModels = new Set();
+        const allTeamsInData = new Set();
+        
+        queryLogs.forEach(log => {
+            const model = log.model_id;
+            const team = log.team || log.iam_group || 'Unknown';
+            
+            allModels.add(model);
+            allTeamsInData.add(team);
+            
+            if (!modelTeamUsage[model]) {
+                modelTeamUsage[model] = {};
+            }
+            
+            if (!modelTeamUsage[model][team]) {
+                modelTeamUsage[model][team] = 0;
+            }
+            
+            modelTeamUsage[model][team]++;
         });
         
-        rowHtml += `<td><strong>${rowTotal}</strong></td></tr>`;
-        tableBody.innerHTML += rowHtml;
-    });
-    
-    // Add TOTAL row
-    let totalRowHtml = '<tr style="font-weight: bold; background-color: #f0f0f0;"><td>TOTAL</td>';
-    let grandTotal = 0;
-    totalRow.forEach(teamTotal => {
-        totalRowHtml += `<td>${teamTotal}</td>`;
-        grandTotal += teamTotal;
-    });
-    totalRowHtml += `<td><strong>${grandTotal}</strong></td></tr>`;
-    tableBody.innerHTML += totalRowHtml;
+        // Use teams from actual data
+        const teamsToDisplay = Array.from(allTeamsInData).sort();
+        
+        // Update table header dynamically
+        let headerHtml = '<tr><th>MODEL</th>';
+        teamsToDisplay.forEach(team => {
+            headerHtml += `<th>${team.toUpperCase()}</th>`;
+        });
+        headerHtml += '<th>TOTAL</th></tr>';
+        tableHead.innerHTML = headerHtml;
+        
+        // Convert to array and sort by total usage
+        const modelsArray = Array.from(allModels).map(model => {
+            const teamCounts = {};
+            let total = 0;
+            
+            teamsToDisplay.forEach(team => {
+                const count = modelTeamUsage[model]?.[team] || 0;
+                teamCounts[team] = count;
+                total += count;
+            });
+            
+            return { model, teamCounts, total };
+        }).sort((a, b) => b.total - a.total);
+        
+        // Calculate totals per team
+        const teamTotals = {};
+        let grandTotal = 0;
+        
+        teamsToDisplay.forEach(team => {
+            teamTotals[team] = 0;
+            modelsArray.forEach(modelData => {
+                teamTotals[team] += modelData.teamCounts[team];
+            });
+            grandTotal += teamTotals[team];
+        });
+        
+        // Render table rows
+        modelsArray.forEach(modelData => {
+            let rowHtml = `<tr><td>${modelData.model}</td>`;
+            
+            teamsToDisplay.forEach(team => {
+                rowHtml += `<td>${modelData.teamCounts[team]}</td>`;
+            });
+            
+            rowHtml += `<td><strong>${modelData.total}</strong></td></tr>`;
+            tableBody.innerHTML += rowHtml;
+        });
+        
+        // Add TOTAL row
+        let totalRowHtml = '<tr style="font-weight: bold; background-color: #f0f0f0;"><td>TOTAL</td>';
+        teamsToDisplay.forEach(team => {
+            totalRowHtml += `<td>${teamTotals[team]}</td>`;
+        });
+        totalRowHtml += `<td><strong>${grandTotal}</strong></td></tr>`;
+        tableBody.innerHTML += totalRowHtml;
+        
+    } catch (error) {
+        console.error('Error loading model usage table:', error);
+        tableBody.innerHTML = `<tr><td colspan="100%">Error loading data</td></tr>`;
+    }
 }
 
-function loadModelConsumptionEvolution() {
-    // Generate sample data for 3 main models over 10 days
-    const modelData = {
-        'eu.anthropic.claude-3-7-sonnet-20250219-v1:0': [150, 180, 200, 170, 190, 210, 180, 160, 140, 120],
-        'eu.anthropic.claude-sonnet-4-20250514-v1:0': [200, 220, 250, 230, 280, 300, 270, 250, 280, 300],
-        'eu.anthropic.claude-sonnet-4-5-20250929-v1:0': [300, 350, 400, 380, 450, 500, 480, 520, 600, 800]
-    };
-    
-    window.charts.updateModelConsumptionEvolutionChart(modelData);
+async function loadModelConsumptionEvolution() {
+    try {
+        // Get real data from query logs for last 10 days
+        const queryLogs = await window.dataService.getQueryLogs({ limit: 1000 });
+        
+        // Group by model and date
+        const modelDateCounts = {};
+        const today = new Date();
+        
+        queryLogs.forEach(log => {
+            const model = log.model_id;
+            const date = new Date(log.request_timestamp);
+            const dateKey = date.toISOString().split('T')[0];
+            
+            if (!modelDateCounts[model]) {
+                modelDateCounts[model] = {};
+            }
+            
+            if (!modelDateCounts[model][dateKey]) {
+                modelDateCounts[model][dateKey] = 0;
+            }
+            
+            modelDateCounts[model][dateKey]++;
+        });
+        
+        // Build data for last 10 days for top 3 models
+        const modelTotals = {};
+        Object.keys(modelDateCounts).forEach(model => {
+            modelTotals[model] = Object.values(modelDateCounts[model]).reduce((a, b) => a + b, 0);
+        });
+        
+        const topModels = Object.keys(modelTotals)
+            .sort((a, b) => modelTotals[b] - modelTotals[a])
+            .slice(0, 3);
+        
+        const modelData = {};
+        topModels.forEach(model => {
+            const dailyData = [];
+            for (let i = 9; i >= 0; i--) {
+                const date = new Date(today);
+                date.setDate(date.getDate() - i);
+                const dateKey = date.toISOString().split('T')[0];
+                dailyData.push(modelDateCounts[model]?.[dateKey] || 0);
+            }
+            modelData[model] = dailyData;
+        });
+        
+        window.charts.updateModelConsumptionEvolutionChart(modelData);
+    } catch (error) {
+        console.error('Error loading model consumption evolution:', error);
+    }
 }
 
-function loadResponseTimeEvolution() {
-    const responseTimeData = [1.5, 1.4, 1.6, 1.3, 1.2, 1.4, 1.3, 1.1, 1.2, 1.0];
-    window.charts.updateResponseTimeEvolutionChart(responseTimeData);
+async function loadResponseTimeEvolution() {
+    try {
+        // Get real data from query logs for last 10 days
+        const queryLogs = await window.dataService.getQueryLogs({ limit: 1000 });
+        
+        // Group by date and calculate average response time
+        const dateTimes = {};
+        const today = new Date();
+        
+        queryLogs.forEach(log => {
+            const date = new Date(log.request_timestamp);
+            const dateKey = date.toISOString().split('T')[0];
+            
+            if (!dateTimes[dateKey]) {
+                dateTimes[dateKey] = {
+                    total: 0,
+                    count: 0
+                };
+            }
+            
+            if (log.processing_time_ms) {
+                dateTimes[dateKey].total += log.processing_time_ms;
+                dateTimes[dateKey].count++;
+            }
+        });
+        
+        // Build data for last 10 days
+        const responseTimeData = [];
+        for (let i = 9; i >= 0; i--) {
+            const date = new Date(today);
+            date.setDate(date.getDate() - i);
+            const dateKey = date.toISOString().split('T')[0];
+            
+            if (dateTimes[dateKey] && dateTimes[dateKey].count > 0) {
+                const avgTime = dateTimes[dateKey].total / dateTimes[dateKey].count / 1000; // Convert to seconds
+                responseTimeData.push(parseFloat(avgTime.toFixed(2)));
+            } else {
+                responseTimeData.push(0);
+            }
+        }
+        
+        window.charts.updateResponseTimeEvolutionChart(responseTimeData);
+    } catch (error) {
+        console.error('Error loading response time evolution:', error);
+    }
 }
 
 // ========== REQUESTS HISTORY TAB ==========
@@ -741,8 +886,8 @@ function loadResponseTimeEvolution() {
 async function loadRequestsHistoryTab() {
     console.log('📊 Loading Requests History tab...');
     
-    // Generate sample query logs data
-    generateQueryLogsData();
+    // Fetch real query logs data from database
+    await fetchQueryLogsData();
     
     // Populate filter dropdowns
     populateFilterDropdowns();
@@ -751,7 +896,71 @@ async function loadRequestsHistoryTab() {
     await loadQueryLogsTableWithPagination();
 }
 
-function generateQueryLogsData() {
+async function fetchQueryLogsData() {
+    try {
+        // Fetch query logs from database via Lambda
+        const queryLogs = await window.dataService.getQueryLogs();
+        
+        allQueryLogsData = queryLogs.map(log => ({
+            // Legacy fields for backward compatibility
+            id: log.query_id || `QL-${Date.now()}-${Math.random()}`,
+            timestamp: new Date(log.request_timestamp),
+            user: log.iam_username || log.email,
+            name: log.person || log.iam_username,
+            team: log.iam_group || log.team || 'Unknown',
+            model: log.model_id,
+            knowledgeBase: log.knowledge_base_id,
+            query: log.user_query,
+            status: log.error_message ? 'ERROR' : 'COMPLETED',
+            tokens: log.tokens_used,
+            responseTime: (log.processing_time_ms / 1000).toFixed(2),
+            errorMessage: log.error_message,
+            expanded: false,
+            
+            // MySQL schema fields
+            query_id: log.query_id,
+            conversation_id: log.conversation_id,
+            iam_username: log.iam_username,
+            iam_user_arn: log.iam_user_arn,
+            iam_group: log.iam_group,
+            person: log.person,
+            user_query: log.user_query,
+            llm_response: log.llm_response,
+            query_word_count: log.query_word_count,
+            query_char_count: log.query_char_count,
+            response_word_count: log.response_word_count,
+            response_char_count: log.response_char_count,
+            tokens_used: log.tokens_used,
+            model_id: log.model_id,
+            knowledge_base_id: log.knowledge_base_id,
+            request_timestamp: log.request_timestamp,
+            response_timestamp: log.response_timestamp,
+            processing_time_ms: log.processing_time_ms,
+            vector_db_time_ms: log.vector_db_time_ms,
+            llm_processing_time_ms: log.llm_processing_time_ms,
+            error_message: log.error_message,
+            lambda_request_id: log.lambda_request_id,
+            api_gateway_request_id: log.api_gateway_request_id,
+            source_ip: log.source_ip,
+            retrieved_documents_count: log.retrieved_documents_count,
+            retrieval_only: log.retrieval_only
+        }));
+        
+        // Sort by timestamp descending (most recent first)
+        allQueryLogsData.sort((a, b) => b.timestamp - a.timestamp);
+        
+        filteredQueryLogsData = [...allQueryLogsData];
+        
+        console.log(`✅ Loaded ${allQueryLogsData.length} query logs from database`);
+    } catch (error) {
+        console.error('❌ Error fetching query logs:', error);
+        allQueryLogsData = [];
+        filteredQueryLogsData = [];
+    }
+}
+
+function generateQueryLogsData_OLD_REMOVED() {
+    // This function has been removed - data now comes from database
     allQueryLogsData = [];
     
     const models = [
@@ -907,38 +1116,41 @@ function generateQueryLogsData() {
     filteredQueryLogsData = [...allQueryLogsData];
 }
 
-function populateFilterDropdowns() {
-    // Populate person dropdown
-    const personSelect = document.getElementById('filter-person');
-    personSelect.innerHTML = '<option value="">Todos</option>';
-    const uniqueUsers = [...new Set(allQueryLogsData.map(log => log.user))].sort();
-    uniqueUsers.forEach(user => {
-        const name = userNames[user] || user;
-        personSelect.innerHTML += `<option value="${user}">${name}</option>`;
-    });
-    
-    // Populate team dropdown
-    const teamSelect = document.getElementById('filter-team');
-    teamSelect.innerHTML = '<option value="">Todos</option>';
-    ALL_TEAMS.forEach(team => {
-        teamSelect.innerHTML += `<option value="${team}">${team}</option>`;
-    });
-    
-    // Populate model dropdown
-    const modelSelect = document.getElementById('filter-model');
-    modelSelect.innerHTML = '<option value="">Todos</option>';
-    const uniqueModels = [...new Set(allQueryLogsData.map(log => log.model))].sort();
-    uniqueModels.forEach(model => {
-        modelSelect.innerHTML += `<option value="${model}">${model}</option>`;
-    });
-    
-    // Populate knowledge base dropdown
-    const kbSelect = document.getElementById('filter-kb');
-    kbSelect.innerHTML = '<option value="">Todos</option>';
-    const uniqueKBs = [...new Set(allQueryLogsData.map(log => log.knowledgeBase))].sort();
-    uniqueKBs.forEach(kb => {
-        kbSelect.innerHTML += `<option value="${kb}">${kb}</option>`;
-    });
+async function populateFilterDropdowns() {
+    try {
+        // Get filter options from Lambda
+        const filters = await window.dataService.getFilters();
+        
+        // Populate person dropdown
+        const personSelect = document.getElementById('filter-person');
+        personSelect.innerHTML = '<option value="">Todos</option>';
+        filters.persons.forEach(person => {
+            personSelect.innerHTML += `<option value="${person}">${person}</option>`;
+        });
+        
+        // Populate team dropdown
+        const teamSelect = document.getElementById('filter-team');
+        teamSelect.innerHTML = '<option value="">Todos</option>';
+        filters.teams.forEach(team => {
+            teamSelect.innerHTML += `<option value="${team}">${team}</option>`;
+        });
+        
+        // Populate model dropdown
+        const modelSelect = document.getElementById('filter-model');
+        modelSelect.innerHTML = '<option value="">Todos</option>';
+        filters.models.forEach(model => {
+            modelSelect.innerHTML += `<option value="${model}">${model}</option>`;
+        });
+        
+        // Populate knowledge base dropdown
+        const kbSelect = document.getElementById('filter-kb');
+        kbSelect.innerHTML = '<option value="">Todos</option>';
+        filters.knowledgeBases.forEach(kb => {
+            kbSelect.innerHTML += `<option value="${kb}">${kb}</option>`;
+        });
+    } catch (error) {
+        console.error('Error populating filter dropdowns:', error);
+    }
 }
 
 function applyFilters() {
@@ -1273,7 +1485,9 @@ function refreshRequestsDetails() {
 }
 
 function logout() {
-    alert('Logout functionality - implement your authentication logic here');
+    if (confirm('Are you sure you want to logout?')) {
+        window.authModule.logout('login.html');
+    }
 }
 
 // Make functions globally available
