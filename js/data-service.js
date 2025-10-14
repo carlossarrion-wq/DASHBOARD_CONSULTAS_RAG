@@ -358,7 +358,7 @@ async function getHourlyMetrics() {
         // Initialize hourly array (24 hours)
         const hourlyData = Array(24).fill(0);
         
-        // Count queries per hour
+        // Count queries per hour for today only
         queryLogs.data.forEach(log => {
             const date = new Date(log.request_timestamp);
             const hour = date.getHours();

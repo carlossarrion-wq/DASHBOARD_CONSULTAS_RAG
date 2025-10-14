@@ -117,12 +117,17 @@ async function loadUserRequestsTab() {
     const hourlyData = await window.dataService.getHourlyMetrics();
     window.charts.updateHourlyHistogramChart(hourlyData);
     
-    // Load user distribution
+    // Load user distribution - use real data from database
     const userDistribution = {};
-    allUsers.forEach(user => {
-        const dailyData = userMetrics[user]?.daily || [];
-        userDistribution[user] = dailyData[10] || 0; // Today's data
+    const queryLogs = await window.dataService.getQueryLogs({ limit: 1000 });
+    
+    // Count queries per user from all available data
+    queryLogs.forEach(log => {
+        if (log.person) {
+            userDistribution[log.person] = (userDistribution[log.person] || 0) + 1;
+        }
     });
+    
     window.charts.updateUserDistributionHistogram(userDistribution);
     
     // Load user daily chart
@@ -139,38 +144,70 @@ async function loadUserRequestsTab() {
     updateUserAlerts();
 }
 
-function updateUserMetrics() {
-    let totalQueriesToday = 0;
-    let activeUsersToday = 0;
-    let totalResponseTime = 0;
-    let activeUserCount = 0;
-    
-    allUsers.forEach(user => {
-        const dailyData = userMetrics[user]?.daily || [];
-        const todayQueries = dailyData[10] || 0;
-        const responseTime = userMetrics[user]?.avgResponseTime || 0;
+async function updateUserMetrics() {
+    try {
+        // Get real data from query logs for today
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        const tomorrow = new Date(today);
+        tomorrow.setDate(tomorrow.getDate() + 1);
         
-        totalQueriesToday += todayQueries;
-        if (todayQueries > 0) {
-            activeUsersToday++;
-            totalResponseTime += responseTime;
-            activeUserCount++;
-        }
-    });
-    
-    const avgQueriesPerUser = activeUsersToday > 0 ? Math.round(totalQueriesToday / activeUsersToday) : 0;
-    const avgResponseTime = activeUserCount > 0 ? (totalResponseTime / activeUserCount).toFixed(2) : 0;
-    
-    document.getElementById('user-total-queries-today').textContent = totalQueriesToday;
-    document.getElementById('user-active-users').textContent = activeUsersToday;
-    document.getElementById('user-avg-queries').textContent = avgQueriesPerUser;
-    document.getElementById('user-avg-response-time').textContent = avgResponseTime + 's';
-    
-    // Update change indicators
-    document.getElementById('user-queries-change').innerHTML = '<span>↗</span> +12% vs yesterday';
-    document.getElementById('user-users-change').innerHTML = '<span>↗</span> +3 active users';
-    document.getElementById('user-avg-change').innerHTML = '<span>→</span> Stable';
-    document.getElementById('user-response-change').innerHTML = '<span>↘</span> -0.2s faster';
+        const queryLogs = await window.dataService.getQueryLogs({ limit: 1000 });
+        
+        // Filter logs for today
+        const todayLogs = queryLogs.filter(log => {
+            const logDate = new Date(log.request_timestamp);
+            return logDate >= today && logDate < tomorrow;
+        });
+        
+        // Calculate metrics
+        let totalQueriesToday = todayLogs.length;
+        const activeUsersSet = new Set();
+        let totalResponseTime = 0;
+        
+        todayLogs.forEach(log => {
+            if (log.person) {
+                activeUsersSet.add(log.person);
+            }
+            if (log.processing_time_ms) {
+                totalResponseTime += log.processing_time_ms;
+            }
+        });
+        
+        const activeUsersToday = activeUsersSet.size;
+        const avgQueriesPerUser = activeUsersToday > 0 ? Math.round(totalQueriesToday / activeUsersToday) : 0;
+        const avgResponseTime = totalQueriesToday > 0 ? (totalResponseTime / totalQueriesToday / 1000).toFixed(2) : 0;
+        
+        document.getElementById('user-total-queries-today').textContent = totalQueriesToday;
+        document.getElementById('user-active-users').textContent = activeUsersToday;
+        document.getElementById('user-avg-queries').textContent = avgQueriesPerUser;
+        document.getElementById('user-avg-response-time').textContent = avgResponseTime + 's';
+        
+        // Calculate change indicators based on yesterday's data
+        const yesterday = new Date(today);
+        yesterday.setDate(yesterday.getDate() - 1);
+        const yesterdayLogs = queryLogs.filter(log => {
+            const logDate = new Date(log.request_timestamp);
+            return logDate >= yesterday && logDate < today;
+        });
+        
+        const yesterdayTotal = yesterdayLogs.length;
+        const changePercent = yesterdayTotal > 0 ? Math.round(((totalQueriesToday - yesterdayTotal) / yesterdayTotal) * 100) : 0;
+        const changeIcon = changePercent > 0 ? '↗' : changePercent < 0 ? '↘' : '→';
+        const changeClass = changePercent > 0 ? 'positive' : changePercent < 0 ? 'negative' : '';
+        
+        document.getElementById('user-queries-change').innerHTML = `<span>${changeIcon}</span> ${changePercent > 0 ? '+' : ''}${changePercent}% vs yesterday`;
+        document.getElementById('user-users-change').innerHTML = `<span>→</span> ${activeUsersToday} active users`;
+        document.getElementById('user-avg-change').innerHTML = '<span>→</span> Stable';
+        document.getElementById('user-response-change').innerHTML = `<span>→</span> ${avgResponseTime}s avg`;
+        
+    } catch (error) {
+        console.error('Error updating user metrics:', error);
+        document.getElementById('user-total-queries-today').textContent = '0';
+        document.getElementById('user-active-users').textContent = '0';
+        document.getElementById('user-avg-queries').textContent = '0';
+        document.getElementById('user-avg-response-time').textContent = '0s';
+    }
 }
 
 function loadUserDailyChart() {
