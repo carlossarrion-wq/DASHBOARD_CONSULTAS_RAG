@@ -586,17 +586,41 @@ function updateRequestsDetailsHeaders() {
     }
 }
 
-function loadDailyTrendChart() {
-    const dailyTotals = Array(10).fill(0);
-    
-    allUsers.forEach(user => {
-        const dailyData = userMetrics[user]?.daily || Array(11).fill(0);
-        for (let i = 0; i < 10; i++) {
-            dailyTotals[i] += dailyData[i + 1] || 0;
+async function loadDailyTrendChart() {
+    try {
+        // Get real data from query logs for last 10 days
+        const queryLogs = await window.dataService.getQueryLogs({ limit: 1000 });
+        
+        // Group by date and count queries
+        const dateCounts = {};
+        const today = new Date();
+        
+        queryLogs.forEach(log => {
+            const date = new Date(log.request_timestamp);
+            const dateKey = date.toISOString().split('T')[0];
+            
+            if (!dateCounts[dateKey]) {
+                dateCounts[dateKey] = 0;
+            }
+            
+            dateCounts[dateKey]++;
+        });
+        
+        // Build data for last 10 days
+        const dailyTotals = [];
+        for (let i = 9; i >= 0; i--) {
+            const date = new Date(today);
+            date.setDate(date.getDate() - i);
+            const dateKey = date.toISOString().split('T')[0];
+            dailyTotals.push(dateCounts[dateKey] || 0);
         }
-    });
-    
-    window.charts.updateRequestsDetailsChart(dailyTotals);
+        
+        window.charts.updateRequestsDetailsChart(dailyTotals);
+    } catch (error) {
+        console.error('Error loading daily trend chart:', error);
+        // Fallback to empty data
+        window.charts.updateRequestsDetailsChart(Array(10).fill(0));
+    }
 }
 
 async function loadRequestsDetailsTableWithPagination() {
