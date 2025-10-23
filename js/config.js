@@ -11,6 +11,32 @@ const AWS_CONFIG = {
     session_timeout: 60
 };
 
+// API Configuration - TODOS los apartados usan esta Lambda con base de datos Trust
+const API_CONFIG = {
+    base_url: 'https://g5i2qixdveuwhneop6z6f24piq0fivtp.lambda-url.eu-west-1.on.aws'
+};
+
+// Trust API Configuration (misma Lambda, para compatibilidad)
+const TRUST_API_CONFIG = {
+    enabled: true,
+    base_url: 'https://g5i2qixdveuwhneop6z6f24piq0fivtp.lambda-url.eu-west-1.on.aws'
+};
+
+// Trust Ranges Configuration
+const TRUST_RANGES = {
+    low: { min: 0, max: 45, label: 'BAJO', color: '#ef4444' },
+    medium: { min: 45, max: 70, label: 'MEDIO', color: '#f59e0b' },
+    high: { min: 70, max: 100, label: 'ALTO', color: '#10b981' }
+};
+
+// Trust Chart Colors
+const TRUST_CHART_COLORS = {
+    low: '#ef4444',
+    medium: '#f59e0b',
+    high: '#10b981',
+    gradient: ['#ef4444', '#f59e0b', '#10b981']
+};
+
 // Chart color schemes
 const CHART_COLORS = {
     primary: [
@@ -59,6 +85,10 @@ const DEFAULT_QUOTA_CONFIG = {
 
 // Make configurations globally available
 window.AWS_CONFIG = AWS_CONFIG;
+window.API_CONFIG = API_CONFIG;
+window.TRUST_API_CONFIG = TRUST_API_CONFIG;
+window.TRUST_RANGES = TRUST_RANGES;
+window.TRUST_CHART_COLORS = TRUST_CHART_COLORS;
 window.CHART_COLORS = CHART_COLORS;
 window.ALL_TEAMS = ALL_TEAMS;
 window.QUERY_TYPES = QUERY_TYPES;

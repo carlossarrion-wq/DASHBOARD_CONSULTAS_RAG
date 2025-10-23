@@ -1,8 +1,8 @@
 // RAG Query Monitoring Dashboard - Data Service
 // This file handles data fetching from the Lambda backend
 
-// API Configuration
-const API_BASE_URL = 'https://0airq1wc9h.execute-api.eu-west-1.amazonaws.com/prod';
+// API Configuration - Use config from config.js
+const API_BASE_URL = window.API_CONFIG?.base_url || 'https://g5i2qixdveuwhneop6z6f24piq0fivtp.lambda-url.eu-west-1.on.aws';
 
 // Global data storage
 let cachedData = {
@@ -445,6 +445,37 @@ async function getQueryLogById(queryId) {
 }
 
 /**
+ * Fetch complete query log details including analysis and retrieved documents
+ */
+async function getQueryLogDetails(queryId) {
+    console.log(`📊 Fetching complete query log details for ${queryId}...`);
+    
+    if (!window.TRUST_API_CONFIG || !window.TRUST_API_CONFIG.enabled) {
+        console.warn('⚠️ Trust API is not enabled, using basic query log');
+        return await getQueryLogById(queryId);
+    }
+    
+    try {
+        const endpoint = `${window.TRUST_API_CONFIG.base_url}/query-logs/${queryId}`;
+        console.log('Calling Trust API for query details:', endpoint);
+        
+        const response = await fetch(endpoint);
+        
+        if (!response.ok) {
+            throw new Error(`Trust API call failed: ${response.status} ${response.statusText}`);
+        }
+        
+        const data = await response.json();
+        console.log('Query details received:', data);
+        return data;
+    } catch (error) {
+        console.error('Error fetching query log details:', error);
+        // Fallback to basic query log
+        return await getQueryLogById(queryId);
+    }
+}
+
+/**
  * Clear cached data
  */
 function clearCache() {
@@ -454,6 +485,36 @@ function clearCache() {
         lastUpdate: null
     };
     console.log('🗑️ Cache cleared');
+}
+
+/**
+ * Fetch trust analytics data from Trust Lambda
+ */
+async function getTrustAnalytics(days = 7, forceRefresh = false) {
+    console.log('📊 Fetching trust analytics from database...');
+    
+    if (!window.TRUST_API_CONFIG || !window.TRUST_API_CONFIG.enabled) {
+        console.warn('⚠️ Trust API is not enabled');
+        return null;
+    }
+    
+    try {
+        const endpoint = `${window.TRUST_API_CONFIG.base_url}/trust-analytics?days=${days}`;
+        console.log('Calling Trust API:', endpoint);
+        
+        const response = await fetch(endpoint);
+        
+        if (!response.ok) {
+            throw new Error(`Trust API call failed: ${response.status} ${response.statusText}`);
+        }
+        
+        const data = await response.json();
+        console.log('Trust data received:', data);
+        return data;
+    } catch (error) {
+        console.error('Error fetching trust analytics:', error);
+        throw error;
+    }
 }
 
 // Make functions globally available
@@ -467,6 +528,8 @@ window.dataService = {
     getModelUsage,
     getQueryLogs,
     getQueryLogById,
+    getQueryLogDetails,
+    getTrustAnalytics,
     clearCache,
     API_BASE_URL
 };

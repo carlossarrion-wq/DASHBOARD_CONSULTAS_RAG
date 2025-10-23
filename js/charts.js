@@ -11,6 +11,9 @@ let modelUsageDistributionChart = null;
 let requestsDetailsChart = null;
 let modelConsumptionEvolutionChart = null;
 let responseTimeEvolutionChart = null;
+let trustDistributionChart = null;
+let trustEvolutionChart = null;
+let trustLevelsChart = null;
 
 /**
  * Update User Daily Chart
@@ -466,6 +469,255 @@ function updateResponseTimeEvolutionChart(responseTimeData) {
     });
 }
 
+/**
+ * Update Trust Distribution Chart (Pie Chart)
+ */
+function updateTrustDistributionChart(distributionData) {
+    const ctx = document.getElementById('trust-distribution-chart');
+    if (!ctx) return;
+
+    if (trustDistributionChart) {
+        trustDistributionChart.destroy();
+    }
+
+    const labels = [];
+    const data = [];
+    const colors = [];
+
+    distributionData.forEach(item => {
+        labels.push(item.range_category);
+        data.push(item.count);
+        
+        if (item.range_category === 'BAJO') {
+            colors.push(window.TRUST_CHART_COLORS.low);
+        } else if (item.range_category === 'MEDIO') {
+            colors.push(window.TRUST_CHART_COLORS.medium);
+        } else if (item.range_category === 'ALTO') {
+            colors.push(window.TRUST_CHART_COLORS.high);
+        }
+    });
+
+    trustDistributionChart = new Chart(ctx, {
+        type: 'pie',
+        data: {
+            labels: labels,
+            datasets: [{
+                data: data,
+                backgroundColor: colors,
+                borderWidth: 2,
+                borderColor: '#fff'
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: {
+                    position: 'right',
+                    labels: {
+                        font: {
+                            size: 12
+                        },
+                        boxWidth: 20
+                    }
+                },
+                tooltip: {
+                    callbacks: {
+                        label: function(context) {
+                            const label = context.label || '';
+                            const value = context.parsed || 0;
+                            const total = context.dataset.data.reduce((a, b) => a + b, 0);
+                            const percentage = ((value / total) * 100).toFixed(1);
+                            return `${label}: ${value} (${percentage}%)`;
+                        }
+                    }
+                }
+            }
+        }
+    });
+}
+
+/**
+ * Update Trust Evolution Chart (Stacked Area Chart by Team)
+ */
+function updateTrustEvolutionChart(evolutionData) {
+    const ctx = document.getElementById('trust-evolution-chart');
+    if (!ctx) return;
+
+    if (trustEvolutionChart) {
+        trustEvolutionChart.destroy();
+    }
+
+    // Group data by team
+    const teamData = {};
+    evolutionData.forEach(item => {
+        if (!teamData[item.team]) {
+            teamData[item.team] = {};
+        }
+        teamData[item.team][item.date] = parseFloat(item.avg_trust);
+    });
+
+    // Get unique dates and sort them
+    const dates = [...new Set(evolutionData.map(item => item.date))].sort();
+    const labels = dates.map(date => moment(date).format('D MMM'));
+
+    // Create datasets for each team
+    const datasets = [];
+    const teams = Object.keys(teamData).sort();
+    
+    // Define specific colors for teams (matching stacked area style)
+    const teamColorMap = {
+        'null': '#90EE90',      // Light green
+        'Darwin': '#4CAF50'     // Green
+    };
+
+    teams.forEach((team) => {
+        const data = dates.map(date => teamData[team][date] || 0);
+        const color = teamColorMap[team] || '#4CAF50';
+        
+        datasets.push({
+            label: team,
+            data: data,
+            borderColor: color,
+            backgroundColor: color + '80',  // Add transparency for area fill
+            tension: 0.4,
+            fill: true,  // Enable area fill
+            borderWidth: 2
+        });
+    });
+
+    trustEvolutionChart = new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: labels,
+            datasets: datasets
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: {
+                    display: true,
+                    position: 'top'
+                },
+                tooltip: {
+                    mode: 'index',
+                    intersect: false,
+                    callbacks: {
+                        label: function(context) {
+                            return context.dataset.label + ': ' + context.parsed.y.toFixed(1) + '%';
+                        }
+                    }
+                }
+            },
+            scales: {
+                x: {
+                    stacked: true,  // Enable stacking on x-axis
+                    title: {
+                        display: true,
+                        text: 'Fecha'
+                    }
+                },
+                y: {
+                    stacked: true,  // Enable stacking on y-axis
+                    beginAtZero: true,
+                    title: {
+                        display: true,
+                        text: 'Confianza Media (%)'
+                    }
+                }
+            }
+        }
+    });
+}
+
+/**
+ * Update Trust Levels Chart (Stacked Area Chart)
+ */
+function updateTrustLevelsChart(levelsData) {
+    const ctx = document.getElementById('trust-levels-chart');
+    if (!ctx) return;
+
+    if (trustLevelsChart) {
+        trustLevelsChart.destroy();
+    }
+
+    // Sort by date
+    const sortedData = levelsData.sort((a, b) => new Date(a.date) - new Date(b.date));
+    
+    const labels = sortedData.map(item => moment(item.date).format('D MMM'));
+    const lowData = sortedData.map(item => item.low_count);
+    const mediumData = sortedData.map(item => item.medium_count);
+    const highData = sortedData.map(item => item.high_count);
+
+    trustLevelsChart = new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: labels,
+            datasets: [
+                {
+                    label: 'BAJO (0-45%)',
+                    data: lowData,
+                    backgroundColor: window.TRUST_CHART_COLORS.low + '80',
+                    borderColor: window.TRUST_CHART_COLORS.low,
+                    borderWidth: 2,
+                    fill: true,
+                    tension: 0.4
+                },
+                {
+                    label: 'MEDIO (45-70%)',
+                    data: mediumData,
+                    backgroundColor: window.TRUST_CHART_COLORS.medium + '80',
+                    borderColor: window.TRUST_CHART_COLORS.medium,
+                    borderWidth: 2,
+                    fill: true,
+                    tension: 0.4
+                },
+                {
+                    label: 'ALTO (70-100%)',
+                    data: highData,
+                    backgroundColor: window.TRUST_CHART_COLORS.high + '80',
+                    borderColor: window.TRUST_CHART_COLORS.high,
+                    borderWidth: 2,
+                    fill: true,
+                    tension: 0.4
+                }
+            ]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: {
+                    display: true,
+                    position: 'top'
+                },
+                tooltip: {
+                    mode: 'index',
+                    intersect: false
+                }
+            },
+            scales: {
+                x: {
+                    stacked: true,
+                    title: {
+                        display: true,
+                        text: 'Fecha'
+                    }
+                },
+                y: {
+                    stacked: true,
+                    beginAtZero: true,
+                    title: {
+                        display: true,
+                        text: 'Número de Queries'
+                    }
+                }
+            }
+        }
+    });
+}
+
 // Make functions globally available
 window.charts = {
     updateUserDailyChart,
@@ -476,7 +728,10 @@ window.charts = {
     updateModelUsageDistributionChart,
     updateRequestsDetailsChart,
     updateModelConsumptionEvolutionChart,
-    updateResponseTimeEvolutionChart
+    updateResponseTimeEvolutionChart,
+    updateTrustDistributionChart,
+    updateTrustEvolutionChart,
+    updateTrustLevelsChart
 };
 
 console.log('✅ Charts module initialized');

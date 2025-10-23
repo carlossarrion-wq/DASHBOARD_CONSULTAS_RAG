@@ -48,6 +48,12 @@
                     </svg>
                     Requests Details
                 </button>
+                <button class="tab-button" onclick="showTab('trust-details-tab')">
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" style="width: 20px; height: 20px; margin-right: 8px;">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75L11.25 15 15 9.75m-3-7.036A11.959 11.959 0 013.598 6 11.99 11.99 0 003 9.749c0 5.592 3.824 10.29 9 11.623 5.176-1.332 9-6.03 9-11.622 0-1.31-.21-2.571-.598-3.751h-.152c-3.196 0-6.1-1.248-8.25-3.285z" />
+                    </svg>
+                    Trust Details
+                </button>
                 <button class="tab-button" onclick="showTab('requests-history-tab')">
                     <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" style="width: 20px; height: 20px; margin-right: 8px;">
                         <path stroke-linecap="round" stroke-linejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z" />
@@ -442,6 +448,157 @@
                 </div>
             </div>
             
+            <!-- Trust Details Tab -->
+            <div id="trust-details-tab" class="tab-content">
+                <div class="section-header">
+                    <h2>Trust Details</h2>
+                    <button class="refresh-button" onclick="refreshTrustDetails()" title="Refresh Data">
+                        <span class="refresh-icon">&#x21bb;</span>
+                        Refresh
+                    </button>
+                </div>
+                
+                <!-- Trust Indicators -->
+                <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 1.5rem; margin-bottom: 2rem;">
+                    <div class="metric-card trust-metric">
+                        <h3>Average Trust Today</h3>
+                        <div class="metric-value" id="trust-avg-today">-</div>
+                        <div class="metric-subtitle">Daily average</div>
+                    </div>
+                    
+                    <div class="metric-card trust-metric">
+                        <h3>80th Percentile Trust Today</h3>
+                        <div class="metric-value" id="trust-p80-today">-</div>
+                        <div class="metric-subtitle">80% of queries</div>
+                    </div>
+                    
+                    <div class="metric-card trust-metric">
+                        <h3>High Trust Response Rate Today</h3>
+                        <div class="metric-value" id="trust-high-rate-today">-</div>
+                        <div class="metric-subtitle">>70% trust</div>
+                    </div>
+                    
+                    <div class="metric-card trust-metric">
+                        <h3>Average Trust Last 7 Days</h3>
+                        <div class="metric-value" id="trust-avg-7days">-</div>
+                        <div class="metric-subtitle">Last 7 days</div>
+                    </div>
+                    
+                    <div class="metric-card trust-metric">
+                        <h3>80th Percentile Trust Last 7 Days</h3>
+                        <div class="metric-value" id="trust-p80-7days">-</div>
+                        <div class="metric-subtitle">Last 7 days</div>
+                    </div>
+                    
+                    <div class="metric-card trust-metric">
+                        <h3>High Trust Response Rate Last 7 Days</h3>
+                        <div class="metric-value" id="trust-high-rate-7days">-</div>
+                        <div class="metric-subtitle">Last 7 days</div>
+                    </div>
+                </div>
+                
+                <!-- Trust by Team and Day Table - Full Width -->
+                <div class="card" style="margin-bottom: 2rem; position: relative;">
+                    <h2>Trust by Team and Day - Last 7 Days</h2>
+                    <button class="export-button" onclick="exportTrustByTeamTable()" title="Export to CSV">
+                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" style="width: 16px; height: 16px;">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3" />
+                        </svg>
+                        Export
+                    </button>
+                    
+                    <!-- Pagination Controls -->
+                    <div class="pagination-controls">
+                        <div class="pagination-info">
+                            <span id="trust-by-team-info">Showing 0-0 of 0 records</span>
+                        </div>
+                        <div class="pagination-buttons">
+                            <button id="prev-trust-by-team-btn" class="btn" onclick="loadPreviousTrustByTeamPage()" disabled>
+                                ←
+                            </button>
+                            <span id="trust-by-team-page-info">Page 1</span>
+                            <button id="next-trust-by-team-btn" class="btn" onclick="loadNextTrustByTeamPage()" disabled>
+                                →
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <table id="trust-by-team-table">
+                        <thead>
+                            <tr>
+                                <th>Team</th>
+                                <th id="trust-day-6">Day -6</th>
+                                <th id="trust-day-5">Day -5</th>
+                                <th id="trust-day-4">Day -4</th>
+                                <th id="trust-day-3">Day -3</th>
+                                <th id="trust-day-2">Day -2</th>
+                                <th id="trust-day-1">Day -1</th>
+                                <th id="trust-day-0">TODAY</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td colspan="8">
+                                    <div class="loading-spinner"></div>
+                                    Loading trust data...
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+                
+                <!-- Trust by Typology Table -->
+                <div class="card" style="margin-bottom: 2rem;">
+                    <h2>
+                        Trust by Typology - Last 7 Days
+                        <span class="info-tooltip" title="Trust percentage is extracted from the llm_trust field which contains a value between 0-100 indicating the model's confidence in its response">🛈</span>
+                    </h2>
+                    <table id="trust-by-typology-table">
+                        <thead>
+                            <tr>
+                                <th>Typology</th>
+                                <th>Avg Trust</th>
+                                <th>Queries</th>
+                                <th>Min</th>
+                                <th>Max</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td colspan="5">
+                                    <div class="loading-spinner"></div>
+                                    Loading typology data...
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+                
+                <!-- Charts -->
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 2rem; margin-bottom: 2rem;">
+                    <div class="card">
+                        <h2>Trust Distribution by Ranges</h2>
+                        <div class="chart-container" style="height: 300px;">
+                            <canvas id="trust-distribution-chart"></canvas>
+                        </div>
+                    </div>
+                    
+                    <div class="card">
+                        <h2>Temporal Evolution by Team</h2>
+                        <div class="chart-container" style="height: 300px;">
+                            <canvas id="trust-evolution-chart"></canvas>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="card">
+                    <h2>Trust Levels Evolution (7 Days)</h2>
+                    <div class="chart-container" style="height: 350px;">
+                        <canvas id="trust-levels-chart"></canvas>
+                    </div>
+                </div>
+            </div>
+            
             <!-- Requests History Tab -->
             <div id="requests-history-tab" class="tab-content">
                 <div class="section-header">
@@ -610,6 +767,14 @@
                             <span class="modal-label">Estado:</span>
                             <span class="modal-value" id="modal-status">-</span>
                         </div>
+                        <div class="modal-info-item">
+                            <span class="modal-label">Tipología:</span>
+                            <span class="modal-value" id="modal-tipology">-</span>
+                        </div>
+                        <div class="modal-info-item">
+                            <span class="modal-label">Confianza LLM:</span>
+                            <span class="modal-value" id="modal-llm-trust">-</span>
+                        </div>
                     </div>
                 </div>
                 
@@ -708,6 +873,80 @@
                             <span class="modal-label">Source IP:</span>
                             <span class="modal-value" id="modal-source-ip">-</span>
                         </div>
+                    </div>
+                </div>
+                
+                <!-- Strategy Analysis Section -->
+                <div class="modal-section" id="modal-strategy-section" style="display: none;">
+                    <h3 class="modal-section-title">Strategy Analysis</h3>
+                    <div class="modal-info-grid">
+                        <div class="modal-info-item">
+                            <span class="modal-label">Strategy Type:</span>
+                            <span class="modal-value" id="modal-strategy-type">-</span>
+                        </div>
+                        <div class="modal-info-item">
+                            <span class="modal-label">Strategy Confidence:</span>
+                            <span class="modal-value">
+                                <span id="modal-strategy-confidence">-</span>
+                                <div class="progress-bar" style="margin-top: 5px;">
+                                    <div class="progress-fill" id="modal-strategy-confidence-bar" style="width: 0%"></div>
+                                </div>
+                            </span>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- LLM Trust Score Section -->
+                <div class="modal-section" id="modal-trust-section" style="display: none;">
+                    <h3 class="modal-section-title">LLM Trust Score</h3>
+                    <div class="modal-trust-score">
+                        <div class="trust-score-header">
+                            <span class="trust-score-value" id="modal-trust-score">-</span>
+                            <span class="trust-score-badge" id="modal-trust-badge">-</span>
+                        </div>
+                        <div class="progress-bar trust-progress">
+                            <div class="progress-fill" id="modal-trust-progress-bar" style="width: 0%"></div>
+                        </div>
+                        <div class="trust-explanation" id="modal-trust-explanation">-</div>
+                    </div>
+                </div>
+                
+                <!-- Detected Intentions Section -->
+                <div class="modal-section" id="modal-intentions-section" style="display: none;">
+                    <h3 class="modal-section-title">Detected Intentions</h3>
+                    <div class="modal-list" id="modal-intentions-list">
+                        <p class="modal-empty-state">No intentions detected</p>
+                    </div>
+                </div>
+                
+                <!-- Tools Used Section -->
+                <div class="modal-section" id="modal-tools-section" style="display: none;">
+                    <h3 class="modal-section-title">Tools Used</h3>
+                    <div class="modal-list" id="modal-tools-list">
+                        <p class="modal-empty-state">No tools used</p>
+                    </div>
+                </div>
+                
+                <!-- Retrieved Documents Section -->
+                <div class="modal-section" id="modal-documents-section" style="display: none;">
+                    <h3 class="modal-section-title">Retrieved Documents</h3>
+                    <div class="modal-documents-container">
+                        <table class="modal-documents-table" id="modal-documents-table">
+                            <thead>
+                                <tr>
+                                    <th>Rank</th>
+                                    <th>Source</th>
+                                    <th>Similarity</th>
+                                    <th>Citation Confidence</th>
+                                    <th>Document Reference</th>
+                                </tr>
+                            </thead>
+                            <tbody id="modal-documents-tbody">
+                                <tr>
+                                    <td colspan="5" class="modal-empty-state">No documents retrieved</td>
+                                </tr>
+                            </tbody>
+                        </table>
                     </div>
                 </div>
                 

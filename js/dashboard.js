@@ -31,6 +31,11 @@ let queryLogsTotalCount = 0;
 let allQueryLogsData = [];
 let filteredQueryLogsData = [];
 
+let trustByTeamCurrentPage = 1;
+let trustByTeamPageSize = 10;
+let trustByTeamTotalCount = 0;
+let allTrustByTeamData = [];
+
 // Initialize dashboard when page loads
 document.addEventListener('DOMContentLoaded', function() {
     console.log('🚀 Initializing RAG Query Monitoring Dashboard...');
@@ -74,6 +79,11 @@ function showTab(tabId) {
             button.classList.add('active');
         }
     });
+    
+    // Auto-load Trust Details when tab is shown
+    if (tabId === 'trust-details') {
+        refreshTrustDetails();
+    }
 }
 
 // Load dashboard data
@@ -95,6 +105,7 @@ async function loadDashboardData() {
         await loadTeamRequestsTab();
         await loadRequestsDetailsTab();
         await loadRequestsHistoryTab();
+        await loadTrustDetailsTab();
         
         isConnected = true;
         updateConnectionStatus('connected', 'Data loaded successfully');
@@ -1004,7 +1015,11 @@ async function fetchQueryLogsData() {
             api_gateway_request_id: log.api_gateway_request_id,
             source_ip: log.source_ip,
             retrieved_documents_count: log.retrieved_documents_count,
-            retrieval_only: log.retrieval_only
+            retrieval_only: log.retrieval_only,
+            
+            // Trust fields - ADDED
+            tipology: log.tipology,
+            llm_trust: log.llm_trust
         }));
         
         // Sort by timestamp descending (most recent first)
@@ -1381,9 +1396,13 @@ function exportQueryLogsTable() {
 
 // ========== MODAL FUNCTIONS ==========
 
-function openQueryDetailModal(logId) {
+async function openQueryDetailModal(logId) {
     const log = allQueryLogsData.find(l => l.id === logId);
     if (!log) return;
+    
+    // Show modal immediately with basic data
+    const modal = document.getElementById('query-detail-modal');
+    modal.classList.add('show');
     
     // User Information Section
     document.getElementById('modal-query-id').textContent = log.query_id || '-';
@@ -1398,9 +1417,19 @@ function openQueryDetailModal(logId) {
     statusSpan.textContent = log.status;
     statusSpan.className = log.status === 'COMPLETED' ? 'status-completed' : 'status-error';
     
+    // Initialize TIPOLOGIA and CONFIANZA LLM with basic data (will be updated with detailed data)
+    document.getElementById('modal-tipology').textContent = '-';
+    document.getElementById('modal-llm-trust').textContent = '-';
+    
     // Query and Response Section
     document.getElementById('modal-user-query').textContent = log.user_query || log.query || '-';
     document.getElementById('modal-llm-response').textContent = log.llm_response || 'No response available';
+    
+    // Remove any existing trust explanation (will be added later if available)
+    const existingExplanation = document.getElementById('modal-trust-explanation-section');
+    if (existingExplanation) {
+        existingExplanation.remove();
+    }
     
     // Statistics Section
     document.getElementById('modal-query-word-count').textContent = log.query_word_count || '-';
@@ -1440,9 +1469,239 @@ function openQueryDetailModal(logId) {
         errorSection.style.display = 'none';
     }
     
-    // Show modal
-    const modal = document.getElementById('query-detail-modal');
-    modal.classList.add('show');
+    // Fetch complete details from API (including analysis and documents)
+    try {
+        const detailedLog = await window.dataService.getQueryLogDetails(log.query_id);
+        
+        if (detailedLog) {
+            // Update TIPOLOGIA and CONFIANZA LLM in User Information Section
+            if (detailedLog.analysis) {
+                // Map strategy_type to readable name
+                const strategyTypeNames = {
+                    'hybrid_search': 'Hybrid Search',
+                    'semantic_search': 'Semantic Search',
+                    'keyword_search': 'Keyword Search',
+                    'direct_answer': 'Direct Answer'
+                };
+                
+                const strategyType = detailedLog.analysis.strategy_type || '-';
+                const strategyTypeName = strategyTypeNames[strategyType] || strategyType;
+                document.getElementById('modal-tipology').textContent = strategyTypeName;
+                
+                const strategyConfidence = detailedLog.analysis.strategy_confidence;
+                document.getElementById('modal-llm-trust').textContent = 
+                    strategyConfidence !== null && strategyConfidence !== undefined ? 
+                    strategyConfidence + '%' : '-';
+            }
+            
+            // Add llm_trust_explanation below LLM response if available
+            if (detailedLog.analysis && detailedLog.analysis.llm_trust_explanation) {
+                const llmResponseElement = document.getElementById('modal-llm-response');
+                const explanationSection = document.createElement('div');
+                explanationSection.id = 'modal-trust-explanation-section';
+                explanationSection.style.marginTop = '1rem';
+                explanationSection.style.padding = '1rem';
+                explanationSection.style.backgroundColor = '#f7fafc';
+                explanationSection.style.borderLeft = '4px solid #4299e1';
+                explanationSection.style.borderRadius = '4px';
+                
+                explanationSection.innerHTML = `
+                    <h4 style="margin: 0 0 0.5rem 0; color: #2d3748; font-size: 0.9rem; font-weight: 600;">
+                        💡 Justificación de Confianza del Modelo
+                    </h4>
+                    <p style="margin: 0; color: #4a5568; font-size: 0.875rem; line-height: 1.5;">
+                        ${detailedLog.analysis.llm_trust_explanation}
+                    </p>
+                `;
+                
+                llmResponseElement.parentNode.insertBefore(explanationSection, llmResponseElement.nextSibling);
+            }
+            
+            // Update Strategy Analysis Section
+            const strategySection = document.getElementById('modal-strategy-section');
+            if (detailedLog.analysis && detailedLog.analysis.strategy_type) {
+                strategySection.style.display = 'block';
+                document.getElementById('modal-strategy-type').textContent = detailedLog.analysis.strategy_type || '-';
+                
+                const strategyConfidence = detailedLog.analysis.strategy_confidence || 0;
+                const strategyBar = document.getElementById('modal-strategy-confidence-bar');
+                strategyBar.style.width = strategyConfidence + '%';
+                strategyBar.textContent = strategyConfidence + '%';
+            } else {
+                strategySection.style.display = 'none';
+            }
+            
+            // Update LLM Trust Score Section
+            const trustSection = document.getElementById('modal-trust-section');
+            if (detailedLog.analysis && detailedLog.analysis.llm_trust !== null && detailedLog.analysis.llm_trust !== undefined) {
+                trustSection.style.display = 'block';
+                
+                const trustScore = detailedLog.analysis.llm_trust;
+                const trustCategory = detailedLog.analysis.llm_trust_category || 
+                    (trustScore >= 70 ? 'ALTO' : trustScore >= 45 ? 'MEDIO' : 'BAJO');
+                
+                document.getElementById('modal-trust-score').textContent = trustScore + '%';
+                
+                const trustBadge = document.getElementById('modal-trust-badge');
+                trustBadge.textContent = trustCategory;
+                trustBadge.className = 'trust-score-badge ' + trustCategory.toLowerCase();
+                
+                const trustBar = document.getElementById('modal-trust-progress-bar');
+                trustBar.style.width = trustScore + '%';
+                
+                const trustExplanation = document.getElementById('modal-trust-explanation');
+                trustExplanation.textContent = detailedLog.analysis.llm_trust_explanation || 'No explanation available';
+            } else {
+                trustSection.style.display = 'none';
+            }
+            
+            // Update Detected Intentions Section
+            const intentionsSection = document.getElementById('modal-intentions-section');
+            if (detailedLog.analysis && detailedLog.analysis.intentions) {
+                try {
+                    const intentions = typeof detailedLog.analysis.intentions === 'string' 
+                        ? JSON.parse(detailedLog.analysis.intentions) 
+                        : detailedLog.analysis.intentions;
+                    
+                    if (Array.isArray(intentions) && intentions.length > 0) {
+                        intentionsSection.style.display = 'block';
+                        const intentionsList = document.getElementById('modal-intentions-list');
+                        intentionsList.innerHTML = '<ul>' + 
+                            intentions.map(intent => `<li>${intent}</li>`).join('') + 
+                            '</ul>';
+                    } else {
+                        intentionsSection.style.display = 'none';
+                    }
+                } catch (e) {
+                    console.error('Error parsing intentions:', e);
+                    intentionsSection.style.display = 'none';
+                }
+            } else {
+                intentionsSection.style.display = 'none';
+            }
+            
+            // Update Tools Used Section
+            const toolsSection = document.getElementById('modal-tools-section');
+            if (detailedLog.analysis && detailedLog.analysis.tools_used) {
+                try {
+                    const tools = typeof detailedLog.analysis.tools_used === 'string' 
+                        ? JSON.parse(detailedLog.analysis.tools_used) 
+                        : detailedLog.analysis.tools_used;
+                    
+                    if (Array.isArray(tools) && tools.length > 0) {
+                        toolsSection.style.display = 'block';
+                        const toolsList = document.getElementById('modal-tools-list');
+                        toolsList.innerHTML = '<ul>' + 
+                            tools.map(tool => `<li>${tool}</li>`).join('') + 
+                            '</ul>';
+                    } else {
+                        toolsSection.style.display = 'none';
+                    }
+                } catch (e) {
+                    console.error('Error parsing tools:', e);
+                    toolsSection.style.display = 'none';
+                }
+            } else {
+                toolsSection.style.display = 'none';
+            }
+            
+            // Update Retrieved Documents Section
+            const documentsSection = document.getElementById('modal-documents-section');
+            if (detailedLog.retrieved_documents && detailedLog.retrieved_documents.length > 0) {
+                documentsSection.style.display = 'block';
+                const documentsTbody = document.getElementById('modal-documents-tbody');
+                documentsTbody.innerHTML = detailedLog.retrieved_documents.map(doc => `
+                    <tr>
+                        <td>${doc.retrieval_rank || '-'}</td>
+                        <td>${doc.source_type || '-'}</td>
+                        <td>${doc.similarity_score !== null ? doc.similarity_score.toFixed(4) : '-'}</td>
+                        <td>${doc.citation_confidence !== null ? doc.citation_confidence.toFixed(2) + '%' : '-'}</td>
+                        <td class="doc-reference">${doc.document_reference || '-'}</td>
+                    </tr>
+                `).join('');
+            } else {
+                documentsSection.style.display = 'none';
+            }
+            
+            // Add Analysis Metadata Section if analysis data exists
+            if (detailedLog.analysis) {
+                // Remove existing metadata section if present
+                const existingMetadata = document.getElementById('modal-analysis-metadata-section');
+                if (existingMetadata) {
+                    existingMetadata.remove();
+                }
+                
+                // Create new metadata section
+                const metadataSection = document.createElement('div');
+                metadataSection.id = 'modal-analysis-metadata-section';
+                metadataSection.className = 'modal-section';
+                
+                let metadataHTML = `
+                    <h3 class="modal-section-title">Analysis Metadata</h3>
+                    <div class="modal-info-grid">
+                `;
+                
+                // Add analysis timestamp if available
+                if (detailedLog.analysis.analysis_timestamp) {
+                    metadataHTML += `
+                        <div class="modal-info-item">
+                            <span class="modal-label">Analysis Timestamp:</span>
+                            <span class="modal-value">${moment(detailedLog.analysis.analysis_timestamp).format('DD/MM/YYYY HH:mm:ss')}</span>
+                        </div>
+                    `;
+                }
+                
+                // Add model version if available
+                if (detailedLog.analysis.model_version) {
+                    metadataHTML += `
+                        <div class="modal-info-item">
+                            <span class="modal-label">Analysis Model Version:</span>
+                            <span class="modal-value">${detailedLog.analysis.model_version}</span>
+                        </div>
+                    `;
+                }
+                
+                // Add processing metadata if available
+                if (detailedLog.analysis.processing_metadata) {
+                    try {
+                        const metadata = typeof detailedLog.analysis.processing_metadata === 'string' 
+                            ? JSON.parse(detailedLog.analysis.processing_metadata) 
+                            : detailedLog.analysis.processing_metadata;
+                        
+                        metadataHTML += `
+                            <div class="modal-info-item" style="grid-column: 1 / -1;">
+                                <span class="modal-label">Processing Metadata:</span>
+                                <span class="modal-value">
+                                    <pre style="margin: 0.5rem 0 0 0; padding: 0.5rem; background: #f7fafc; border-radius: 4px; font-size: 0.75rem; overflow-x: auto;">${JSON.stringify(metadata, null, 2)}</pre>
+                                </span>
+                            </div>
+                        `;
+                    } catch (e) {
+                        console.error('Error parsing processing_metadata:', e);
+                    }
+                }
+                
+                metadataHTML += `</div>`;
+                metadataSection.innerHTML = metadataHTML;
+                
+                // Insert before error section or at the end
+                const errorSection = document.getElementById('modal-error-section');
+                if (errorSection) {
+                    errorSection.parentNode.insertBefore(metadataSection, errorSection);
+                } else {
+                    document.querySelector('.modal-body').appendChild(metadataSection);
+                }
+            }
+        }
+    } catch (error) {
+        console.error('Error fetching query details:', error);
+        // Hide all new sections on error
+        document.getElementById('modal-strategy-section').style.display = 'none';
+        document.getElementById('modal-trust-section').style.display = 'none';
+        document.getElementById('modal-intentions-section').style.display = 'none';
+        document.getElementById('modal-tools-section').style.display = 'none';
+        document.getElementById('modal-documents-section').style.display = 'none';
+    }
 }
 
 function closeQueryDetailModal() {
@@ -1551,6 +1810,252 @@ function logout() {
     }
 }
 
+// ========== TRUST DETAILS TAB ==========
+
+async function loadTrustDetailsTab() {
+    console.log('📊 Loading Trust Details tab (initial load)...');
+    await refreshTrustDetails();
+}
+
+async function refreshTrustDetails() {
+    console.log('📊 Refreshing Trust Details tab...');
+    
+    try {
+        // Check if Trust API is enabled
+        if (!window.TRUST_API_CONFIG || !window.TRUST_API_CONFIG.enabled) {
+            console.warn('⚠️ Trust API is not enabled');
+            showTrustError('Trust API is not configured. Please check your configuration.');
+            return;
+        }
+        
+        // Fetch trust analytics data
+        const trustData = await window.dataService.getTrustAnalytics(7);
+        
+        if (!trustData) {
+            showTrustError('Failed to load trust data. Please try again later.');
+            return;
+        }
+        
+        // Update indicators
+        updateTrustIndicators(trustData.indicators);
+        
+        // Update tables
+        updateTrustByTeamTable(trustData.tables.trustByTeamDay);
+        updateTrustByTypologyTable(trustData.tables.trustByTypology);
+        
+        // Update charts
+        window.charts.updateTrustDistributionChart(trustData.charts.trustDistribution);
+        window.charts.updateTrustEvolutionChart(trustData.charts.trustEvolutionByTeam);
+        window.charts.updateTrustLevelsChart(trustData.charts.trustLevelsEvolution);
+        
+        console.log('✅ Trust Details loaded successfully');
+        
+    } catch (error) {
+        console.error('Error loading Trust Details:', error);
+        showTrustError('An error occurred while loading trust data: ' + error.message);
+    }
+}
+
+function updateTrustIndicators(indicators) {
+    // Update all 6 indicators
+    document.getElementById('trust-avg-today').textContent = indicators.avgTrustToday + '%';
+    document.getElementById('trust-avg-7days').textContent = indicators.avgTrustPeriod + '%';
+    document.getElementById('trust-p80-today').textContent = indicators.percentile80Today + '%';
+    document.getElementById('trust-p80-7days').textContent = indicators.percentile80Period + '%';
+    document.getElementById('trust-high-rate-today').textContent = indicators.highConfidenceRateToday + '%';
+    document.getElementById('trust-high-rate-7days').textContent = indicators.highConfidenceRatePeriod + '%';
+}
+
+function updateTrustByTeamTable(data) {
+    if (!data || data.length === 0) {
+        const tableBody = document.querySelector('#trust-by-team-table tbody');
+        tableBody.innerHTML = '<tr><td colspan="8">No data available</td></tr>';
+        allTrustByTeamData = [];
+        trustByTeamTotalCount = 0;
+        updateTrustByTeamPaginationInfo();
+        return;
+    }
+    
+    // Update date headers for last 7 days
+    updateTrustByTeamHeaders();
+    
+    // Group data by team and date
+    const teamDateData = {};
+    
+    data.forEach(row => {
+        const team = row.team;
+        const date = row.date;
+        
+        if (!teamDateData[team]) {
+            teamDateData[team] = {};
+        }
+        
+        teamDateData[team][date] = parseFloat(row.avg_trust).toFixed(1);
+    });
+    
+    // Get all unique teams
+    const teams = Object.keys(teamDateData).sort();
+    
+    // Get last 7 days
+    const last7Days = [];
+    for (let i = 6; i >= 0; i--) {
+        const date = new Date();
+        date.setDate(date.getDate() - i);
+        last7Days.push(date.toISOString().split('T')[0]);
+    }
+    
+    // Build table data
+    allTrustByTeamData = teams.map(team => {
+        const dailyTrust = last7Days.map(date => {
+            return teamDateData[team][date] || '-';
+        });
+        
+        return {
+            team: team,
+            dailyTrust: dailyTrust
+        };
+    });
+    
+    trustByTeamTotalCount = allTrustByTeamData.length;
+    trustByTeamCurrentPage = 1;
+    renderTrustByTeamPage();
+}
+
+function updateTrustByTeamHeaders() {
+    // Update headers with dates in format "D MMM"
+    for (let i = 6; i >= 0; i--) {
+        const date = new Date();
+        date.setDate(date.getDate() - i);
+        const headerElement = document.getElementById(`trust-day-${i}`);
+        
+        if (headerElement) {
+            if (i === 0) {
+                headerElement.textContent = 'TODAY';
+            } else {
+                headerElement.textContent = moment(date).format('D MMM').toUpperCase();
+            }
+        }
+    }
+}
+
+function renderTrustByTeamPage() {
+    const tableBody = document.querySelector('#trust-by-team-table tbody');
+    tableBody.innerHTML = '';
+    
+    const startIndex = (trustByTeamCurrentPage - 1) * trustByTeamPageSize;
+    const endIndex = Math.min(startIndex + trustByTeamPageSize, trustByTeamTotalCount);
+    const pageData = allTrustByTeamData.slice(startIndex, endIndex);
+    
+    pageData.forEach(row => {
+        let rowHtml = `<tr><td>${row.team}</td>`;
+        
+        // Add daily trust values
+        row.dailyTrust.forEach(trust => {
+            rowHtml += `<td>${trust}${trust !== '-' ? '%' : ''}</td>`;
+        });
+        
+        rowHtml += '</tr>';
+        tableBody.innerHTML += rowHtml;
+    });
+    
+    updateTrustByTeamPaginationInfo();
+}
+
+function updateTrustByTeamPaginationInfo() {
+    const startIndex = (trustByTeamCurrentPage - 1) * trustByTeamPageSize;
+    const endIndex = Math.min(startIndex + trustByTeamPageSize, trustByTeamTotalCount);
+    const totalPages = Math.ceil(trustByTeamTotalCount / trustByTeamPageSize);
+    
+    document.getElementById('trust-by-team-info').textContent = 
+        `Showing ${startIndex + 1}-${endIndex} of ${trustByTeamTotalCount} records`;
+    document.getElementById('trust-by-team-page-info').textContent = 
+        `Page ${trustByTeamCurrentPage} of ${totalPages}`;
+    
+    document.getElementById('prev-trust-by-team-btn').disabled = trustByTeamCurrentPage <= 1;
+    document.getElementById('next-trust-by-team-btn').disabled = trustByTeamCurrentPage >= totalPages;
+}
+
+function loadPreviousTrustByTeamPage() {
+    if (trustByTeamCurrentPage > 1) {
+        trustByTeamCurrentPage--;
+        renderTrustByTeamPage();
+    }
+}
+
+function loadNextTrustByTeamPage() {
+    const totalPages = Math.ceil(trustByTeamTotalCount / trustByTeamPageSize);
+    if (trustByTeamCurrentPage < totalPages) {
+        trustByTeamCurrentPage++;
+        renderTrustByTeamPage();
+    }
+}
+
+function exportTrustByTeamTable() {
+    exportToCSV('trust-by-team-table', 'trust-by-team');
+}
+
+function updateTrustByTypologyTable(data) {
+    const tableBody = document.querySelector('#trust-by-typology-table tbody');
+    tableBody.innerHTML = '';
+    
+    if (!data || data.length === 0) {
+        tableBody.innerHTML = '<tr><td colspan="5">No data available</td></tr>';
+        return;
+    }
+    
+    // Map strategy types to readable names
+    const strategyTypeNames = {
+        'hybrid_search': 'Hybrid Search',
+        'semantic_search': 'Semantic Search',
+        'keyword_search': 'Keyword Search',
+        'direct_answer': 'Direct Answer'
+    };
+    
+    data.forEach(row => {
+        const avgTrust = parseFloat(row.avg_trust).toFixed(2);
+        const minTrust = parseFloat(row.min_trust).toFixed(2);
+        const maxTrust = parseFloat(row.max_trust).toFixed(2);
+        
+        // Use strategy_type field and map to readable name
+        const strategyType = row.strategy_type || row.tipology || 'Unknown';
+        const typologyLabel = strategyTypeNames[strategyType] || strategyType;
+        
+        tableBody.innerHTML += `
+            <tr>
+                <td>${typologyLabel}</td>
+                <td>${avgTrust}%</td>
+                <td>${row.query_count}</td>
+                <td>${minTrust}%</td>
+                <td>${maxTrust}%</td>
+            </tr>
+        `;
+    });
+}
+
+function showTrustError(message) {
+    // Show error in all trust sections
+    const indicators = ['trust-avg-today', 'trust-avg-7days', 'trust-p80-today', 
+                       'trust-p80-7days', 'trust-high-rate-today', 'trust-high-rate-7days'];
+    
+    indicators.forEach(id => {
+        const element = document.getElementById(id);
+        if (element) {
+            element.textContent = 'N/A';
+        }
+    });
+    
+    // Show error in tables
+    const teamTableBody = document.querySelector('#trust-by-team-table tbody');
+    if (teamTableBody) {
+        teamTableBody.innerHTML = `<tr><td colspan="4" style="color: #ef4444;">${message}</td></tr>`;
+    }
+    
+    const typologyTableBody = document.querySelector('#trust-by-typology-table tbody');
+    if (typologyTableBody) {
+        typologyTableBody.innerHTML = `<tr><td colspan="5" style="color: #ef4444;">${message}</td></tr>`;
+    }
+}
+
 // Make functions globally available
 window.showTab = showTab;
 window.loadDashboardData = loadDashboardData;
@@ -1575,6 +2080,10 @@ window.loadNextQueryLogsPage = loadNextQueryLogsPage;
 window.exportQueryLogsTable = exportQueryLogsTable;
 window.openQueryDetailModal = openQueryDetailModal;
 window.closeQueryDetailModal = closeQueryDetailModal;
+window.refreshTrustDetails = refreshTrustDetails;
+window.loadPreviousTrustByTeamPage = loadPreviousTrustByTeamPage;
+window.loadNextTrustByTeamPage = loadNextTrustByTeamPage;
+window.exportTrustByTeamTable = exportTrustByTeamTable;
 window.logout = logout;
 
 console.log('✅ Dashboard initialized successfully');
