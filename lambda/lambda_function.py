@@ -368,13 +368,14 @@ def handle_trust_analytics(query_params, origin=None):
         cursor.execute("""
             SELECT 
                 DATE(created_at) as date,
-                llm_trust_category as level,
-                COUNT(*) as count
+                COUNT(CASE WHEN llm_trust_category = 'low' THEN 1 END) as low_count,
+                COUNT(CASE WHEN llm_trust_category = 'medium' THEN 1 END) as medium_count,
+                COUNT(CASE WHEN llm_trust_category = 'high' THEN 1 END) as high_count
             FROM web_queries
             WHERE created_at >= %s
                 AND llm_trust_category IS NOT NULL
-            GROUP BY DATE(created_at), llm_trust_category
-            ORDER BY date, level
+            GROUP BY DATE(created_at)
+            ORDER BY date
         """, [start_date])
         trust_levels = cursor.fetchall()
         
