@@ -1354,12 +1354,13 @@ function applyFilters() {
     }
     
     filteredQueryLogsData = allQueryLogsData.filter(log => {
-        // Search filter - buscar en query y session_token
+        // Search filter - buscar en query, session_token y conversation_id_bedrock
         if (searchText) {
             const queryMatch = log.query.toLowerCase().includes(searchText);
             const sessionTokenMatch = log.session_token && log.session_token.toLowerCase().includes(searchText);
+            const conversationIdMatch = log.conversation_id_bedrock && log.conversation_id_bedrock.toLowerCase().includes(searchText);
             
-            if (!queryMatch && !sessionTokenMatch) {
+            if (!queryMatch && !sessionTokenMatch && !conversationIdMatch) {
                 return false;
             }
         }
