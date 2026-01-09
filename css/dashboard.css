@@ -337,6 +337,12 @@ table td:nth-child(n+4) {
     text-align: center;
 }
 
+/* Center Daily Queries column in Team Query Details table */
+#team-query-table th:nth-child(2),
+#team-query-table td:nth-child(2) {
+    text-align: center;
+}
+
 /* Alerts */
 .alert {
     padding: 1.5rem;
