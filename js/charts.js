@@ -484,16 +484,26 @@ function updateTrustDistributionChart(distributionData) {
     const data = [];
     const colors = [];
 
-    distributionData.forEach(item => {
-        labels.push(item.range_category);
-        data.push(item.count);
-        
-        if (item.range_category === 'BAJO') {
-            colors.push(window.TRUST_CHART_COLORS.low);
-        } else if (item.range_category === 'MEDIO') {
-            colors.push(window.TRUST_CHART_COLORS.medium);
-        } else if (item.range_category === 'ALTO') {
-            colors.push(window.TRUST_CHART_COLORS.high);
+    // Handle object format: {high: 29, medium: 13, low: 4}
+    const categoryMap = {
+        'low': 'BAJO',
+        'medium': 'MEDIO',
+        'high': 'ALTO'
+    };
+    
+    const colorMap = {
+        'low': window.TRUST_CHART_COLORS.low,
+        'medium': window.TRUST_CHART_COLORS.medium,
+        'high': window.TRUST_CHART_COLORS.high
+    };
+    
+    // Convert object to array and sort by priority (low, medium, high)
+    const order = ['low', 'medium', 'high'];
+    order.forEach(key => {
+        if (distributionData[key]) {
+            labels.push(categoryMap[key]);
+            data.push(distributionData[key]);
+            colors.push(colorMap[key]);
         }
     });
 

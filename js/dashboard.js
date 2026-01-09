@@ -1079,16 +1079,37 @@ async function fetchQueryLogsData() {
             errorMessage: log.error_message,
             expanded: false,
             
-            // MySQL schema fields
+            // MySQL schema fields - ALL FIELDS FROM DDL
             query_id: log.query_id,
-            conversation_id: log.conversation_id,
+            user_id: log.user_id,
             session_token: log.session_token,
+            query_text: log.query_text || log.user_query,
+            conversation_id: log.conversation_id,
+            created_at: log.created_at,
+            response_time_ms: log.response_time_ms || log.processing_time_ms,
+            status: log.status || (log.error_message ? 'ERROR' : 'completed'),
+            confidence_score: log.confidence_score,
+            streaming_status: log.streaming_status,
+            llm_response: log.llm_response,
+            app_name: log.app_name,
+            llm_trust_category: log.llm_trust_category,
+            tools_used: log.tools_used,
+            tool_results: log.tool_results,
+            retrieved_docs_count: log.retrieved_docs_count,
+            response_timestamp: log.response_timestamp,
+            tokens_input: log.tokens_input,
+            tokens_output: log.tokens_output,
+            tokens_total: log.tokens_total,
+            conversation_id_bedrock: log.conversation_id_bedrock,
+            user_name: log.user_name,
+            person_name: log.person_name || log.person,
+            iam_group: log.iam_group,
+            
+            // Legacy fields for backward compatibility
             iam_username: log.iam_username,
             iam_user_arn: log.iam_user_arn,
-            iam_group: log.iam_group,
             person: log.person,
             user_query: log.user_query,
-            llm_response: log.llm_response,
             query_word_count: log.query_word_count,
             query_char_count: log.query_char_count,
             response_word_count: log.response_word_count,
@@ -1097,7 +1118,6 @@ async function fetchQueryLogsData() {
             model_id: log.model_id,
             knowledge_base_id: log.knowledge_base_id,
             request_timestamp: log.request_timestamp,
-            response_timestamp: log.response_timestamp,
             processing_time_ms: log.processing_time_ms,
             vector_db_time_ms: log.vector_db_time_ms,
             llm_processing_time_ms: log.llm_processing_time_ms,
@@ -1108,7 +1128,7 @@ async function fetchQueryLogsData() {
             retrieved_documents_count: log.retrieved_documents_count,
             retrieval_only: log.retrieval_only,
             
-            // Trust fields - ADDED
+            // Trust fields
             tipology: log.tipology,
             llm_trust: log.llm_trust
         }));
@@ -1499,61 +1519,107 @@ async function openQueryDetailModal(logId) {
     const modal = document.getElementById('query-detail-modal');
     modal.classList.add('show');
     
-    // User Information Section
-    document.getElementById('modal-query-id').textContent = log.query_id || '-';
-    document.getElementById('modal-conversation-id').textContent = log.conversation_id || '-';
-    document.getElementById('modal-iam-username').textContent = log.iam_username || '-';
-    document.getElementById('modal-iam-user-arn').textContent = log.iam_user_arn || '-';
-    document.getElementById('modal-iam-group').textContent = log.iam_group || '-';
-    document.getElementById('modal-person').textContent = log.person || log.name || '-';
-    document.getElementById('modal-team').textContent = log.team || '-';
+    // Basic Information Section
+    document.getElementById('modal-id').textContent = log.id || log.query_id || '-';
+    document.getElementById('modal-session-token').textContent = log.session_token || '-';
+    document.getElementById('modal-conversation-id-bedrock').textContent = log.conversation_id_bedrock || '-';
+    // Map app_name to team/iam_group
+    document.getElementById('modal-app-name').textContent = log.app_name || log.team || log.iam_group || '-';
     
     const statusSpan = document.getElementById('modal-status');
-    statusSpan.textContent = log.status;
+    statusSpan.textContent = log.status || '-';
     statusSpan.className = log.status === 'COMPLETED' ? 'status-completed' : 'status-error';
     
-    // Initialize TIPOLOGIA and CONFIANZA LLM with basic data (will be updated with detailed data)
-    document.getElementById('modal-tipology').textContent = '-';
-    document.getElementById('modal-llm-trust').textContent = '-';
+    document.getElementById('modal-streaming-status').textContent = log.streaming_status || 'complete';
+    document.getElementById('modal-created-at').textContent = 
+        log.created_at ? moment(log.created_at).format('DD/MM/YYYY HH:mm:ss') : 
+        (log.request_timestamp ? moment(log.request_timestamp).format('DD/MM/YYYY HH:mm:ss') : '-');
+    
+    // User Information Section
+    document.getElementById('modal-user-id').textContent = log.user_id !== null && log.user_id !== undefined ? log.user_id : '-';
+    document.getElementById('modal-user-name').textContent = log.user_name || '-';
+    document.getElementById('modal-person-name').textContent = log.person_name || log.person || log.name || '-';
+    document.getElementById('modal-iam-group').textContent = log.iam_group || '-';
     
     // Query and Response Section
-    document.getElementById('modal-user-query').textContent = log.user_query || log.query || '-';
+    document.getElementById('modal-user-query').textContent = log.query_text || log.user_query || log.query || '-';
     document.getElementById('modal-llm-response').textContent = log.llm_response || 'No response available';
     
-    // Remove any existing trust explanation (will be added later if available)
-    const existingExplanation = document.getElementById('modal-trust-explanation-section');
-    if (existingExplanation) {
-        existingExplanation.remove();
+    // Tokens Section
+    document.getElementById('modal-tokens-input').textContent = log.tokens_input !== null && log.tokens_input !== undefined ? log.tokens_input : '-';
+    document.getElementById('modal-tokens-output').textContent = log.tokens_output !== null && log.tokens_output !== undefined ? log.tokens_output : '-';
+    document.getElementById('modal-tokens-total').textContent = log.tokens_total !== null && log.tokens_total !== undefined ? log.tokens_total : '-';
+    document.getElementById('modal-retrieved-docs-count').textContent = log.retrieved_docs_count !== null && log.retrieved_docs_count !== undefined ? log.retrieved_docs_count : '-';
+    
+    // Trust & Confidence Section
+    document.getElementById('modal-confidence-score').textContent = 
+        log.confidence_score !== null && log.confidence_score !== undefined ? 
+        parseFloat(log.confidence_score).toFixed(2) + '%' : '-';
+    document.getElementById('modal-llm-trust-category').textContent = log.llm_trust_category || '-';
+    
+    // Tool Results Section (JSONB object)
+    const toolResultsSection = document.getElementById('modal-tool-results-section');
+    const toolResultsContainer = document.getElementById('modal-tool-results-container');
+    
+    if (log.tool_results) {
+        try {
+            const results = typeof log.tool_results === 'string' ? JSON.parse(log.tool_results) : log.tool_results;
+            
+            if (results && Object.keys(results).length > 0) {
+                toolResultsSection.style.display = 'block';
+                
+                let resultsHTML = '<div style="display: grid; gap: 1rem;">';
+                
+                Object.entries(results).forEach(([toolName, result]) => {
+                    resultsHTML += `
+                        <div style="padding: 1rem; background: #f7fafc; border-radius: 8px; border-left: 4px solid #4299e1;">
+                            <h4 style="margin: 0 0 0.5rem 0; color: #2d3748; font-size: 0.9rem; font-weight: 600;">
+                                ${toolName}
+                            </h4>
+                            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 0.5rem; font-size: 0.875rem;">
+                                ${result.success !== undefined ? `
+                                    <div>
+                                        <span style="color: #718096;">Success:</span>
+                                        <span style="color: ${result.success ? '#38a169' : '#e53e3e'}; font-weight: 600;">
+                                            ${result.success ? '✓ Yes' : '✗ No'}
+                                        </span>
+                                    </div>
+                                ` : ''}
+                                ${result.data_size !== undefined ? `
+                                    <div>
+                                        <span style="color: #718096;">Data Size:</span>
+                                        <span style="color: #2d3748; font-weight: 600;">${result.data_size} bytes</span>
+                                    </div>
+                                ` : ''}
+                                ${result.execution_time_ms !== undefined ? `
+                                    <div>
+                                        <span style="color: #718096;">Execution Time:</span>
+                                        <span style="color: #2d3748; font-weight: 600;">${result.execution_time_ms.toFixed(2)} ms</span>
+                                    </div>
+                                ` : ''}
+                            </div>
+                        </div>
+                    `;
+                });
+                
+                resultsHTML += '</div>';
+                toolResultsContainer.innerHTML = resultsHTML;
+            } else {
+                toolResultsSection.style.display = 'none';
+            }
+        } catch (e) {
+            console.error('Error parsing tool_results:', e);
+            toolResultsSection.style.display = 'none';
+        }
+    } else {
+        toolResultsSection.style.display = 'none';
     }
     
-    // Statistics Section
-    document.getElementById('modal-query-word-count').textContent = log.query_word_count || '-';
-    document.getElementById('modal-query-char-count').textContent = log.query_char_count || '-';
-    document.getElementById('modal-response-word-count').textContent = log.response_word_count || '-';
-    document.getElementById('modal-response-char-count').textContent = log.response_char_count || '-';
-    document.getElementById('modal-tokens-used').textContent = log.tokens_used || log.tokens || '-';
-    document.getElementById('modal-retrieved-docs').textContent = log.retrieved_documents_count || '-';
-    
     // Performance Metrics Section
-    document.getElementById('modal-request-timestamp').textContent = 
-        log.request_timestamp ? moment(log.request_timestamp).format('DD/MM/YYYY HH:mm:ss') : '-';
+    document.getElementById('modal-response-time-ms').textContent = 
+        log.response_time_ms ? `${log.response_time_ms} ms` : '-';
     document.getElementById('modal-response-timestamp').textContent = 
         log.response_timestamp ? moment(log.response_timestamp).format('DD/MM/YYYY HH:mm:ss') : '-';
-    document.getElementById('modal-processing-time').textContent = 
-        log.processing_time_ms ? `${log.processing_time_ms} ms` : '-';
-    document.getElementById('modal-vector-db-time').textContent = 
-        log.vector_db_time_ms ? `${log.vector_db_time_ms} ms` : '-';
-    document.getElementById('modal-llm-processing-time').textContent = 
-        log.llm_processing_time_ms ? `${log.llm_processing_time_ms} ms` : '-';
-    document.getElementById('modal-retrieval-only').textContent = 
-        log.retrieval_only ? 'Yes' : 'No';
-    
-    // Technical Details Section
-    document.getElementById('modal-model-id').textContent = log.model_id || log.model || '-';
-    document.getElementById('modal-kb-id').textContent = log.knowledge_base_id || log.knowledgeBase || '-';
-    document.getElementById('modal-lambda-request-id').textContent = log.lambda_request_id || '-';
-    document.getElementById('modal-api-gateway-request-id').textContent = log.api_gateway_request_id || '-';
-    document.getElementById('modal-source-ip').textContent = log.source_ip || '-';
     
     // Error Section
     const errorSection = document.getElementById('modal-error-section');
@@ -2186,6 +2252,3 @@ window.exportTrustByTeamTable = exportTrustByTeamTable;
 window.logout = logout;
 
 console.log('✅ Dashboard initialized successfully');
-window.loadPreviousTrustByTeamPage = loadPreviousTrustByTeamPage;
-window.loadNextTrustByTeamPage = loadNextTrustByTeamPage;
-window.logout = logout;
