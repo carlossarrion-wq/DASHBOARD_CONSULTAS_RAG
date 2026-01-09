@@ -1553,7 +1553,7 @@ async function openQueryDetailModal(logId) {
     // Trust & Confidence Section
     document.getElementById('modal-confidence-score').textContent = 
         log.confidence_score !== null && log.confidence_score !== undefined ? 
-        parseFloat(log.confidence_score).toFixed(2) + '%' : '-';
+        (parseFloat(log.confidence_score) * 100).toFixed(2) + '%' : '-';
     document.getElementById('modal-llm-trust-category').textContent = log.llm_trust_category || '-';
     
     // Tool Results Section (JSONB object)
