@@ -171,7 +171,7 @@ async function updateUserMetrics() {
         const tomorrow = new Date(today);
         tomorrow.setDate(tomorrow.getDate() + 1);
         
-        const queryLogs = await window.dataService.getQueryLogs({ limit: 1000 });
+        const queryLogs = await window.dataService.getQueryLogs({ limit: 10000 });
         
         // Filter logs for today
         const todayLogs = queryLogs.filter(log => {
@@ -433,7 +433,12 @@ function loadTeamMonthlyChart() {
     const labels = [];
     const data = [];
     
-    ALL_TEAMS.forEach(team => {
+    // Get teams from teamMetrics (real data) instead of ALL_TEAMS (static list)
+    const teamsWithData = Object.keys(teamMetrics).filter(team => {
+        return teamMetrics[team]?.monthly > 0;
+    }).sort();
+    
+    teamsWithData.forEach(team => {
         labels.push(team);
         data.push(teamMetrics[team]?.monthly || 0);
     });
@@ -462,15 +467,19 @@ function loadTeamDailyChart() {
     }
     
     const datasets = [];
-    ALL_TEAMS.forEach((team, index) => {
+    
+    // Get teams from teamMetrics (real data) instead of ALL_TEAMS (static list)
+    const teamsWithData = Object.keys(teamMetrics).sort();
+    
+    teamsWithData.forEach((team, index) => {
         const dailyData = teamMetrics[team]?.daily || Array(11).fill(0);
         const chartData = dailyData.slice(1, 11);
         
         datasets.push({
             label: team,
             data: chartData,
-            borderColor: CHART_COLORS.teams[index],
-            backgroundColor: CHART_COLORS.teams[index] + '33',
+            borderColor: CHART_COLORS.teams[index % CHART_COLORS.teams.length],
+            backgroundColor: CHART_COLORS.teams[index % CHART_COLORS.teams.length] + '33',
             tension: 0.4,
             fill: true
         });
@@ -486,7 +495,10 @@ function loadTeamQueryTable() {
     const tableBody = document.querySelector('#team-query-table tbody');
     tableBody.innerHTML = '';
     
-    ALL_TEAMS.forEach(team => {
+    // Get teams from teamMetrics (real data) instead of ALL_TEAMS (static list)
+    const teamsWithData = Object.keys(teamMetrics).sort();
+    
+    teamsWithData.forEach(team => {
         const dailyData = teamMetrics[team]?.daily || Array(11).fill(0);
         const dailyTotal = dailyData[10] || 0;
         const monthlyTotal = teamMetrics[team]?.monthly || 0;
@@ -514,28 +526,79 @@ function loadTeamQueryTable() {
 async function loadTeamUsersTableWithPagination() {
     allTeamUsersData = [];
     
-    ALL_TEAMS.forEach(team => {
-        const teamUsers = usersByTeam[team] || [];
-        const teamTotal = teamMetrics[team]?.monthly || 0;
+    // Get teams from teamMetrics (real data) instead of ALL_TEAMS (static list)
+    const teamsWithData = Object.keys(teamMetrics).sort();
+    
+    // We need to fetch query logs to get user_name and person_name for each person
+    try {
+        const queryLogs = await window.dataService.getQueryLogs({ limit: 10000 });
         
-        teamUsers.forEach(user => {
-            const name = userNames[user] || 'Unknown';
-            const monthlyQueries = userMetrics[user]?.monthly || 0;
-            const percentage = teamTotal > 0 ? Math.round((monthlyQueries / teamTotal) * 100) : 0;
+        // Build a map of person_name -> {user_name, iam_group}
+        // Note: In the database, the fields are user_name, person_name, and iam_group
+        const personMap = {};
+        queryLogs.forEach(log => {
+            // person_name is the key in userMetrics
+            const personName = log.person_name || log.person;
+            const userName = log.user_name || log.iam_username;
+            const team = log.iam_group || log.team || 'Unknown';
             
-            allTeamUsersData.push({
-                user,
-                name,
-                team,
-                monthlyQueries,
-                percentage
+            if (personName && !personMap[personName]) {
+                personMap[personName] = {
+                    userName: userName || personName,
+                    team: team
+                };
+            }
+        });
+        
+        teamsWithData.forEach(team => {
+            // Calculate team total by summing all users in this team
+            let teamTotal = 0;
+            const teamUsers = [];
+            
+            // First pass: collect all users for this team and calculate real team total
+            Object.keys(userMetrics).forEach(personName => {
+                const metrics = userMetrics[personName];
+                const personInfo = personMap[personName];
+                
+                if (personInfo && personInfo.team === team) {
+                    const monthlyQueries = metrics?.monthly || 0;
+                    teamTotal += monthlyQueries;
+                    
+                    teamUsers.push({
+                        userName: personInfo.userName,
+                        personName: personName,
+                        monthlyQueries: monthlyQueries
+                    });
+                }
+            });
+            
+            // Second pass: calculate percentages with correct team total
+            teamUsers.forEach(user => {
+                const percentage = teamTotal > 0 ? Math.round((user.monthlyQueries / teamTotal) * 100) : 0;
+                
+                allTeamUsersData.push({
+                    user: user.userName,      // user_name from DB (e.g., darwin_003)
+                    name: user.personName,    // person_name from DB (e.g., José Fernández)
+                    team: team,               // iam_group from DB
+                    monthlyQueries: user.monthlyQueries,
+                    percentage
+                });
             });
         });
-    });
-    
-    teamUsersTotalCount = allTeamUsersData.length;
-    teamUsersCurrentPage = 1;
-    renderTeamUsersPage();
+        
+        // Sort by monthlyQueries descending (users with most queries first)
+        allTeamUsersData.sort((a, b) => b.monthlyQueries - a.monthlyQueries);
+        
+        teamUsersTotalCount = allTeamUsersData.length;
+        teamUsersCurrentPage = 1;
+        renderTeamUsersPage();
+        
+    } catch (error) {
+        console.error('Error loading team users table:', error);
+        allTeamUsersData = [];
+        teamUsersTotalCount = 0;
+        renderTeamUsersPage();
+    }
 }
 
 function renderTeamUsersPage() {
@@ -660,7 +723,7 @@ function updateRequestsDetailsHeaders() {
 async function loadDailyTrendChart() {
     try {
         // Get real data from query logs for last 10 days
-        const queryLogs = await window.dataService.getQueryLogs({ limit: 1000 });
+        const queryLogs = await window.dataService.getQueryLogs({ limit: 10000 });
         
         // Group by date and count queries
         const dateCounts = {};
@@ -792,7 +855,7 @@ async function loadModelUsageTable() {
     
     try {
         // Get real data from query logs
-        const queryLogs = await window.dataService.getQueryLogs({ limit: 1000 });
+        const queryLogs = await window.dataService.getQueryLogs({ limit: 10000 });
         
         // Count usage by model and team
         const modelTeamUsage = {};
@@ -883,7 +946,7 @@ async function loadModelUsageTable() {
 async function loadModelConsumptionEvolution() {
     try {
         // Get real data from query logs for last 10 days
-        const queryLogs = await window.dataService.getQueryLogs({ limit: 1000 });
+        const queryLogs = await window.dataService.getQueryLogs({ limit: 10000 });
         
         // Group by model and date
         const modelDateCounts = {};
@@ -936,7 +999,7 @@ async function loadModelConsumptionEvolution() {
 async function loadResponseTimeEvolution() {
     try {
         // Get real data from query logs for last 10 days
-        const queryLogs = await window.dataService.getQueryLogs({ limit: 1000 });
+        const queryLogs = await window.dataService.getQueryLogs({ limit: 10000 });
         
         // Group by date and calculate average response time
         const dateTimes = {};
@@ -997,8 +1060,8 @@ async function loadRequestsHistoryTab() {
 
 async function fetchQueryLogsData() {
     try {
-        // Fetch query logs from database via Lambda
-        const queryLogs = await window.dataService.getQueryLogs();
+        // Fetch query logs from database via Lambda (get more records to include all users)
+        const queryLogs = await window.dataService.getQueryLogs({ limit: 10000 });
         
         allQueryLogsData = queryLogs.map(log => ({
             // Legacy fields for backward compatibility
@@ -1019,6 +1082,7 @@ async function fetchQueryLogsData() {
             // MySQL schema fields
             query_id: log.query_id,
             conversation_id: log.conversation_id,
+            session_token: log.session_token,
             iam_username: log.iam_username,
             iam_user_arn: log.iam_user_arn,
             iam_group: log.iam_group,
@@ -1244,13 +1308,6 @@ async function populateFilterDropdowns() {
         filters.models.forEach(model => {
             modelSelect.innerHTML += `<option value="${model}">${model}</option>`;
         });
-        
-        // Populate knowledge base dropdown
-        const kbSelect = document.getElementById('filter-kb');
-        kbSelect.innerHTML = '<option value="">Todos</option>';
-        filters.knowledgeBases.forEach(kb => {
-            kbSelect.innerHTML += `<option value="${kb}">${kb}</option>`;
-        });
     } catch (error) {
         console.error('Error populating filter dropdowns:', error);
     }
@@ -1261,19 +1318,34 @@ function applyFilters() {
     const person = document.getElementById('filter-person').value;
     const team = document.getElementById('filter-team').value;
     const model = document.getElementById('filter-model').value;
-    const kb = document.getElementById('filter-kb').value;
     const status = document.getElementById('filter-status').value;
     const startDate = document.getElementById('filter-start-date').value;
     const endDate = document.getElementById('filter-end-date').value;
     
+    // Validate date range
+    if (startDate && endDate) {
+        const start = new Date(startDate);
+        const end = new Date(endDate);
+        
+        if (start > end) {
+            alert('La fecha de inicio debe ser menor o igual a la fecha de fin');
+            return;
+        }
+    }
+    
     filteredQueryLogsData = allQueryLogsData.filter(log => {
-        // Search filter
-        if (searchText && !log.query.toLowerCase().includes(searchText)) {
-            return false;
+        // Search filter - buscar en query y session_token
+        if (searchText) {
+            const queryMatch = log.query.toLowerCase().includes(searchText);
+            const sessionTokenMatch = log.session_token && log.session_token.toLowerCase().includes(searchText);
+            
+            if (!queryMatch && !sessionTokenMatch) {
+                return false;
+            }
         }
         
         // Person filter
-        if (person && log.user !== person) {
+        if (person && log.name !== person) {
             return false;
         }
         
@@ -1284,11 +1356,6 @@ function applyFilters() {
         
         // Model filter
         if (model && log.model !== model) {
-            return false;
-        }
-        
-        // Knowledge Base filter
-        if (kb && log.knowledgeBase !== kb) {
             return false;
         }
         
@@ -1325,7 +1392,6 @@ function clearFilters() {
     document.getElementById('filter-person').value = '';
     document.getElementById('filter-team').value = '';
     document.getElementById('filter-model').value = '';
-    document.getElementById('filter-kb').value = '';
     document.getElementById('filter-status').value = '';
     document.getElementById('filter-start-date').value = '';
     document.getElementById('filter-end-date').value = '';
@@ -1352,10 +1418,12 @@ function renderQueryLogsPage() {
     pageData.forEach(log => {
         const statusClass = log.status === 'COMPLETED' ? 'status-completed' : 'status-error';
         const dateStr = moment(log.timestamp).format('DD/MM/YYYY HH:mm:ss');
+        const sessionToken = log.session_token || '-';
         
         let rowHtml = `
             <tr id="log-row-${log.id}" style="cursor: pointer;" onclick="openQueryDetailModal('${log.id}')">
                 <td>${dateStr}</td>
+                <td>${sessionToken}</td>
                 <td>${log.name}</td>
                 <td>${log.team}</td>
                 <td class="query-cell">${log.query}</td>
@@ -1885,12 +1953,14 @@ async function refreshTrustDetails() {
 
 function updateTrustIndicators(indicators) {
     // Update all 6 indicators
-    document.getElementById('trust-avg-today').textContent = indicators.avgTrustToday + '%';
-    document.getElementById('trust-avg-7days').textContent = indicators.avgTrustPeriod + '%';
-    document.getElementById('trust-p80-today').textContent = indicators.percentile80Today + '%';
-    document.getElementById('trust-p80-7days').textContent = indicators.percentile80Period + '%';
-    document.getElementById('trust-high-rate-today').textContent = indicators.highConfidenceRateToday + '%';
-    document.getElementById('trust-high-rate-7days').textContent = indicators.highConfidenceRatePeriod + '%';
+    // First 4 indicators: multiply by 100 (come as decimals 0-1)
+    document.getElementById('trust-avg-today').textContent = (parseFloat(indicators.avgTrustToday) * 100).toFixed(2) + '%';
+    document.getElementById('trust-avg-7days').textContent = (parseFloat(indicators.avgTrustPeriod) * 100).toFixed(2) + '%';
+    document.getElementById('trust-p80-today').textContent = (parseFloat(indicators.percentile80Today) * 100).toFixed(2) + '%';
+    document.getElementById('trust-p80-7days').textContent = (parseFloat(indicators.percentile80Period) * 100).toFixed(2) + '%';
+    // Last 2 indicators: already in percentage format (0-100), just format
+    document.getElementById('trust-high-rate-today').textContent = parseFloat(indicators.highConfidenceRateToday).toFixed(2) + '%';
+    document.getElementById('trust-high-rate-7days').textContent = parseFloat(indicators.highConfidenceRatePeriod).toFixed(2) + '%';
 }
 
 function updateTrustByTeamTable(data) {
@@ -1917,7 +1987,8 @@ function updateTrustByTeamTable(data) {
             teamDateData[team] = {};
         }
         
-        teamDateData[team][date] = parseFloat(row.avg_trust).toFixed(1);
+        // Multiply by 100 to convert from decimal (0-1) to percentage (0-100)
+        teamDateData[team][date] = (parseFloat(row.avg_trust) * 100).toFixed(1);
     });
     
     // Get all unique teams
@@ -2039,9 +2110,10 @@ function updateTrustByTypologyTable(data) {
     };
     
     data.forEach(row => {
-        const avgTrust = parseFloat(row.avg_trust).toFixed(2);
-        const minTrust = parseFloat(row.min_trust).toFixed(2);
-        const maxTrust = parseFloat(row.max_trust).toFixed(2);
+        // Multiply by 100 to convert from decimal (0-1) to percentage (0-100)
+        const avgTrust = (parseFloat(row.avg_trust) * 100).toFixed(2);
+        const minTrust = (parseFloat(row.min_trust) * 100).toFixed(2);
+        const maxTrust = (parseFloat(row.max_trust) * 100).toFixed(2);
         
         // Use strategy_type field and map to readable name
         const strategyType = row.strategy_type || row.tipology || 'Unknown';
@@ -2115,3 +2187,5 @@ window.logout = logout;
 
 console.log('✅ Dashboard initialized successfully');
 window.loadPreviousTrustByTeamPage = loadPreviousTrustByTeamPage;
+window.loadNextTrustByTeamPage = loadNextTrustByTeamPage;
+window.logout = logout;

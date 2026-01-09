@@ -463,36 +463,54 @@
                     <div class="metric-card trust-metric">
                         <h3>Average Trust Today</h3>
                         <div class="metric-value" id="trust-avg-today">-</div>
-                        <div class="metric-subtitle">Daily average</div>
+                        <div class="metric-change">
+                            <span>→</span> Daily average
+                        </div>
+                        <div class="metric-subtitle">Today</div>
                     </div>
                     
                     <div class="metric-card trust-metric">
                         <h3>80th Percentile Trust Today</h3>
                         <div class="metric-value" id="trust-p80-today">-</div>
-                        <div class="metric-subtitle">80% of queries</div>
+                        <div class="metric-change">
+                            <span>→</span> 80% of queries
+                        </div>
+                        <div class="metric-subtitle">Today</div>
                     </div>
                     
                     <div class="metric-card trust-metric">
                         <h3>High Trust Response Rate Today</h3>
                         <div class="metric-value" id="trust-high-rate-today">-</div>
-                        <div class="metric-subtitle">>70% trust</div>
+                        <div class="metric-change">
+                            <span>→</span> >70% trust
+                        </div>
+                        <div class="metric-subtitle">Today</div>
                     </div>
                     
                     <div class="metric-card trust-metric">
                         <h3>Average Trust Last 7 Days</h3>
                         <div class="metric-value" id="trust-avg-7days">-</div>
+                        <div class="metric-change">
+                            <span>→</span> Weekly average
+                        </div>
                         <div class="metric-subtitle">Last 7 days</div>
                     </div>
                     
                     <div class="metric-card trust-metric">
                         <h3>80th Percentile Trust Last 7 Days</h3>
                         <div class="metric-value" id="trust-p80-7days">-</div>
+                        <div class="metric-change">
+                            <span>→</span> 80% of queries
+                        </div>
                         <div class="metric-subtitle">Last 7 days</div>
                     </div>
                     
                     <div class="metric-card trust-metric">
                         <h3>High Trust Response Rate Last 7 Days</h3>
                         <div class="metric-value" id="trust-high-rate-7days">-</div>
+                        <div class="metric-change">
+                            <span>→</span> >70% trust
+                        </div>
                         <div class="metric-subtitle">Last 7 days</div>
                     </div>
                 </div>
@@ -584,7 +602,7 @@
                     </div>
                     
                     <div class="card">
-                        <h2>Temporal Evolution by Team</h2>
+                        <h2>Trust Evolution by Team</h2>
                         <div class="chart-container" style="height: 300px;">
                             <canvas id="trust-evolution-chart"></canvas>
                         </div>
@@ -614,7 +632,7 @@
                     <div class="filters-grid">
                         <div class="filter-group">
                             <label for="filter-search">Búsqueda</label>
-                            <input type="text" id="filter-search" placeholder="Buscar en queries...">
+                            <input type="text" id="filter-search" placeholder="Buscar en queries o session ID...">
                         </div>
                         
                         <div class="filter-group">
@@ -634,13 +652,6 @@
                         <div class="filter-group">
                             <label for="filter-model">Modelo</label>
                             <select id="filter-model">
-                                <option value="">Todos</option>
-                            </select>
-                        </div>
-                        
-                        <div class="filter-group">
-                            <label for="filter-kb">Knowledge Base</label>
-                            <select id="filter-kb">
                                 <option value="">Todos</option>
                             </select>
                         </div>
@@ -701,6 +712,7 @@
                         <thead>
                             <tr style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white;">
                                 <th>FECHA</th>
+                                <th>SESSION ID</th>
                                 <th>PERSONA</th>
                                 <th>EQUIPO</th>
                                 <th>QUERY</th>
@@ -1055,3 +1067,4 @@
     </script>
 </body>
 </html>
+        }

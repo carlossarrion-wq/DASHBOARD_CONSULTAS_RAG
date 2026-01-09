@@ -554,7 +554,8 @@ function updateTrustEvolutionChart(evolutionData) {
         if (!teamData[item.team]) {
             teamData[item.team] = {};
         }
-        teamData[item.team][item.date] = parseFloat(item.avg_trust);
+        // Multiply by 100 to convert from decimal (0-1) to percentage (0-100)
+        teamData[item.team][item.date] = parseFloat(item.avg_trust) * 100;
     });
 
     // Get unique dates and sort them
@@ -612,15 +613,14 @@ function updateTrustEvolutionChart(evolutionData) {
             },
             scales: {
                 x: {
-                    stacked: true,  // Enable stacking on x-axis
                     title: {
                         display: true,
                         text: 'Fecha'
                     }
                 },
                 y: {
-                    stacked: true,  // Enable stacking on y-axis
                     beginAtZero: true,
+                    max: 100,  // Set maximum to 100% for trust scores
                     title: {
                         display: true,
                         text: 'Confianza Media (%)'
