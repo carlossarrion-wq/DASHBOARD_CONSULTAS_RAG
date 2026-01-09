@@ -1931,7 +1931,9 @@ function exportToCSV(tableId, filename) {
         csvContent += rowData.join(',') + '\n';
     });
     
-    const blob = new Blob([csvContent], { type: 'text/csv' });
+    // Add UTF-8 BOM for Excel compatibility
+    const BOM = '\uFEFF';
+    const blob = new Blob([BOM + csvContent], { type: 'text/csv;charset=utf-8;' });
     const link = document.createElement('a');
     link.href = URL.createObjectURL(blob);
     link.download = `${filename}-${new Date().toISOString().split('T')[0]}.csv`;
