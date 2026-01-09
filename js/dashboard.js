@@ -1310,21 +1310,21 @@ async function populateFilterDropdowns() {
         
         // Populate person dropdown
         const personSelect = document.getElementById('filter-person');
-        personSelect.innerHTML = '<option value="">Todos</option>';
+        personSelect.innerHTML = '<option value="">All</option>';
         filters.persons.forEach(person => {
             personSelect.innerHTML += `<option value="${person}">${person}</option>`;
         });
         
         // Populate team dropdown
         const teamSelect = document.getElementById('filter-team');
-        teamSelect.innerHTML = '<option value="">Todos</option>';
+        teamSelect.innerHTML = '<option value="">All</option>';
         filters.teams.forEach(team => {
             teamSelect.innerHTML += `<option value="${team}">${team}</option>`;
         });
         
         // Populate model dropdown
         const modelSelect = document.getElementById('filter-model');
-        modelSelect.innerHTML = '<option value="">Todos</option>';
+        modelSelect.innerHTML = '<option value="">All</option>';
         filters.models.forEach(model => {
             modelSelect.innerHTML += `<option value="${model}">${model}</option>`;
         });
