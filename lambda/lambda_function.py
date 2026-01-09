@@ -173,7 +173,7 @@ def handle_query_logs(query_params, origin=None):
         query = f"""
             SELECT 
                 id as query_id,
-                user_id,
+                user_name as user_id,
                 created_at as request_timestamp,
                 person_name as person,
                 app_name as team,
@@ -419,7 +419,7 @@ def handle_query_log_detail(query_id, origin=None):
         cursor.execute("""
             SELECT 
                 id as query_id,
-                user_id,
+                user_name as user_id,
                 created_at as request_timestamp,
                 person_name as person,
                 person_name as person_name,
