@@ -185,6 +185,7 @@ async function getUsers() {
 
 /**
  * Fetch user metrics (queries, response times, etc.) from analytics
+ * Uses pagination to fetch all data for the last 30 days
  */
 async function getUserMetrics(forceRefresh = false) {
     console.log('📊 Fetching user metrics from database...');
@@ -198,13 +199,23 @@ async function getUserMetrics(forceRefresh = false) {
         
         const metrics = {};
         
-        // Get daily data for last 30 days
-        const queryLogs = await makeAPICall('/query-logs?limit=1000');
+        // Calculate date range for last 30 days to ensure we get all recent data
+        const today = new Date();
+        const thirtyDaysAgo = new Date(today);
+        thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+        
+        const startDate = thirtyDaysAgo.toISOString();
+        const endDate = today.toISOString();
+        
+        // Fetch ALL query logs using pagination
+        const allQueryLogs = await fetchAllQueryLogsWithPagination(startDate, endDate);
+        
+        console.log(`📊 Processing ${allQueryLogs.length} query logs for user metrics`);
         
         // Calculate metrics per user
         const userStats = {};
         
-        queryLogs.data.forEach(log => {
+        allQueryLogs.forEach(log => {
             const person = log.person;
             if (!person) return;
             
@@ -254,6 +265,8 @@ async function getUserMetrics(forceRefresh = false) {
             };
         });
         
+        console.log(`✅ User metrics calculated for ${Object.keys(metrics).length} users`);
+        
         return metrics;
     } catch (error) {
         console.error('Error fetching user metrics:', error);
@@ -263,6 +276,7 @@ async function getUserMetrics(forceRefresh = false) {
 
 /**
  * Fetch team metrics from analytics
+ * Uses pagination to fetch all data for the last 30 days
  */
 async function getTeamMetrics(forceRefresh = false) {
     console.log('📊 Fetching team metrics from database...');
@@ -276,13 +290,23 @@ async function getTeamMetrics(forceRefresh = false) {
         
         const teamMetrics = {};
         
-        // Get daily data for teams
-        const queryLogs = await makeAPICall('/query-logs?limit=1000');
+        // Calculate date range for last 30 days to ensure we get all recent data
+        const today = new Date();
+        const thirtyDaysAgo = new Date(today);
+        thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+        
+        const startDate = thirtyDaysAgo.toISOString();
+        const endDate = today.toISOString();
+        
+        // Fetch ALL query logs using pagination
+        const allQueryLogs = await fetchAllQueryLogsWithPagination(startDate, endDate);
+        
+        console.log(`📊 Processing ${allQueryLogs.length} query logs for team metrics`);
         
         // Calculate metrics per team
         const teamStats = {};
         
-        queryLogs.data.forEach(log => {
+        allQueryLogs.forEach(log => {
             const team = log.team || log.iam_group || 'Unknown';
             
             if (!teamStats[team]) {
@@ -330,6 +354,8 @@ async function getTeamMetrics(forceRefresh = false) {
                 avgResponseTime: avgResponseTime
             };
         });
+        
+        console.log(`✅ Team metrics calculated for ${Object.keys(teamMetrics).length} teams`);
         
         return teamMetrics;
     } catch (error) {
@@ -472,6 +498,64 @@ async function getQueryLogDetails(queryId) {
         console.error('Error fetching query log details:', error);
         // Fallback to basic query log
         return await getQueryLogById(queryId);
+    }
+}
+
+/**
+ * Fetch all query logs using pagination
+ * @param {string} startDate - Start date in ISO format
+ * @param {string} endDate - End date in ISO format
+ * @param {number} pageSize - Number of records per page (default: 1000)
+ * @returns {Promise<Array>} All query logs for the date range
+ */
+async function fetchAllQueryLogsWithPagination(startDate, endDate, pageSize = 1000) {
+    console.log(`📊 Fetching all query logs with pagination (${startDate} to ${endDate})...`);
+    
+    const allLogs = [];
+    let offset = 0;
+    let hasMore = true;
+    let pageCount = 0;
+    
+    try {
+        while (hasMore) {
+            pageCount++;
+            const params = new URLSearchParams({
+                start_date: startDate,
+                end_date: endDate,
+                limit: pageSize.toString(),
+                offset: offset.toString()
+            });
+            
+            const endpoint = `/query-logs?${params.toString()}`;
+            const response = await makeAPICall(endpoint);
+            
+            if (response.data && response.data.length > 0) {
+                allLogs.push(...response.data);
+                console.log(`  📄 Page ${pageCount}: Fetched ${response.data.length} records (total: ${allLogs.length})`);
+                
+                // Check if there are more records
+                if (response.data.length < pageSize) {
+                    hasMore = false;
+                } else {
+                    offset += pageSize;
+                }
+            } else {
+                hasMore = false;
+            }
+            
+            // Safety limit: stop after 50 pages (50,000 records)
+            if (pageCount >= 50) {
+                console.warn('⚠️ Reached maximum page limit (50 pages)');
+                hasMore = false;
+            }
+        }
+        
+        console.log(`✅ Fetched total of ${allLogs.length} query logs in ${pageCount} pages`);
+        return allLogs;
+        
+    } catch (error) {
+        console.error('Error fetching query logs with pagination:', error);
+        return allLogs; // Return what we have so far
     }
 }
 
