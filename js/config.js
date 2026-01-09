@@ -13,13 +13,13 @@ const AWS_CONFIG = {
 
 // API Configuration - TODOS los apartados usan esta Lambda con base de datos Trust
 const API_CONFIG = {
-    base_url: 'https://g5i2qixdveuwhneop6z6f24piq0fivtp.lambda-url.eu-west-1.on.aws'
+    base_url: 'https://y3uw77p5s2fm2uauqtz6375iui0bjkms.lambda-url.eu-west-1.on.aws'
 };
 
 // Trust API Configuration (misma Lambda, para compatibilidad)
 const TRUST_API_CONFIG = {
     enabled: true,
-    base_url: 'https://g5i2qixdveuwhneop6z6f24piq0fivtp.lambda-url.eu-west-1.on.aws'
+    base_url: 'https://y3uw77p5s2fm2uauqtz6375iui0bjkms.lambda-url.eu-west-1.on.aws'
 };
 
 // Trust Ranges Configuration
