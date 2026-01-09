@@ -97,13 +97,7 @@ async function loadDashboardData() {
         usersByTeam = userData.usersByTeam;
         userNames = userData.userNames;
         
-        const metricsData = await window.dataService.getUserMetrics();
-        userMetrics = metricsData.userMetrics || {};
-        const hourlyDataToday = metricsData.hourlyDataToday || Array(24).fill(0);
-        
-        // Store hourly data globally for use in loadUserRequestsTab
-        window.hourlyDataToday = hourlyDataToday;
-        
+        userMetrics = await window.dataService.getUserMetrics();
         teamMetrics = await window.dataService.getTeamMetrics();
         
         // Load all sections
@@ -130,20 +124,18 @@ async function loadUserRequestsTab() {
     // Update metrics
     updateUserMetrics();
     
-    // Load hourly histogram - use data from getUserMetrics (already calculated)
-    const hourlyData = window.hourlyDataToday || Array(24).fill(0);
+    // Load hourly histogram
+    const hourlyData = await window.dataService.getHourlyMetrics();
     window.charts.updateHourlyHistogramChart(hourlyData);
     
-    // Load user distribution - use same data as User Query Details table (daily queries from userMetrics)
+    // Load user distribution - use real data from database
     const userDistribution = {};
+    const queryLogs = await window.dataService.getQueryLogs({ limit: 1000 });
     
-    // Use the same daily data that's shown in the User Query Details table
-    Object.keys(userMetrics).forEach(user => {
-        const dailyData = userMetrics[user]?.daily || Array(11).fill(0);
-        const dailyTotal = dailyData[10] || 0; // Today's queries (index 10 = today)
-        
-        if (dailyTotal > 0) {
-            userDistribution[user] = dailyTotal;
+    // Count queries per user from all available data
+    queryLogs.forEach(log => {
+        if (log.person) {
+            userDistribution[log.person] = (userDistribution[log.person] || 0) + 1;
         }
     });
     
@@ -243,21 +235,12 @@ function loadUserDailyChart() {
     
     const datasets = [];
     
-    // Get users with metrics and sort by today's queries (descending)
-    const usersWithMetrics = Object.keys(userMetrics).map(user => {
-        const dailyData = userMetrics[user]?.daily || Array(11).fill(0);
-        const todayQueries = dailyData[10] || 0; // Index 10 = today
-        return { user, todayQueries };
-    });
+    // Filter out null/undefined users and limit to 5
+    const validUsers = allUsers.filter(user => user != null).slice(0, 5);
     
-    // Sort by today's queries and take top 5
-    usersWithMetrics.sort((a, b) => b.todayQueries - a.todayQueries);
-    const topUsers = usersWithMetrics.slice(0, 5);
-    
-    topUsers.forEach((userObj, index) => {
-        const user = userObj.user;
+    validUsers.forEach((user, index) => {
         const dailyData = userMetrics[user]?.daily || Array(11).fill(0);
-        const chartData = dailyData.slice(1, 11); // Last 10 days (indices 1-10)
+        const chartData = dailyData.slice(1, 11); // Last 10 days
         
         // Get user display name (handle cases where user might not have @ symbol)
         const displayName = user.includes('@') ? user.split('@')[0] : user;
@@ -281,11 +264,8 @@ function loadUserDailyChart() {
 async function loadUserQueryTableWithPagination() {
     allUserQueryData = [];
     
-    // Use userMetrics to ensure we include ALL users with metrics
-    const usersWithMetrics = Object.keys(userMetrics);
-    
-    usersWithMetrics.forEach(user => {
-        const name = userNames[user] || user; // Use user as fallback
+    allUsers.forEach(user => {
+        const name = userNames[user] || 'Unknown';
         let team = 'Unknown';
         for (const t in usersByTeam) {
             if (usersByTeam[t].includes(user)) {
@@ -318,9 +298,6 @@ async function loadUserQueryTableWithPagination() {
             avgResponseTime
         });
     });
-    
-    // Sort by dailyTotal descending (users with most queries today appear first)
-    allUserQueryData.sort((a, b) => b.dailyTotal - a.dailyTotal);
     
     userQueryTotalCount = allUserQueryData.length;
     userQueryCurrentPage = 1;
@@ -697,12 +674,8 @@ async function loadDailyTrendChart() {
 async function loadRequestsDetailsTableWithPagination() {
     allRequestsDetailsData = [];
     
-    // Iterate over all users that have metrics (from userMetrics)
-    // This ensures we include ALL users who made queries, not just those in allUsers
-    const usersWithMetrics = Object.keys(userMetrics);
-    
-    usersWithMetrics.forEach(user => {
-        const name = userNames[user] || user; // Use user as fallback if name not found
+    allUsers.forEach(user => {
+        const name = userNames[user] || 'Unknown';
         let team = 'Unknown';
         for (const t in usersByTeam) {
             if (usersByTeam[t].includes(user)) {
@@ -2114,4 +2087,3 @@ window.exportTrustByTeamTable = exportTrustByTeamTable;
 window.logout = logout;
 
 console.log('✅ Dashboard initialized successfully');
-window.loadPreviousTrustByTeamPage = loadPreviousTrustByTeamPage;

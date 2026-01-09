@@ -215,6 +215,11 @@ async function getUserMetrics(forceRefresh = false) {
         // Calculate metrics per user
         const userStats = {};
         
+        // Also calculate hourly data for today
+        const todayStart = new Date(today);
+        todayStart.setHours(0, 0, 0, 0);
+        const hourlyDataToday = Array(24).fill(0);
+        
         allQueryLogs.forEach(log => {
             const person = log.person;
             if (!person) return;
@@ -233,6 +238,12 @@ async function getUserMetrics(forceRefresh = false) {
             const dateKey = date.toISOString().split('T')[0];
             userStats[person].dailyCounts[dateKey] = (userStats[person].dailyCounts[dateKey] || 0) + 1;
             userStats[person].totalQueries++;
+            
+            // Count hourly for today
+            if (date >= todayStart) {
+                const hour = date.getHours();
+                hourlyDataToday[hour]++;
+            }
             
             // Sum response times
             if (log.processing_time_ms) {
@@ -267,10 +278,17 @@ async function getUserMetrics(forceRefresh = false) {
         
         console.log(`✅ User metrics calculated for ${Object.keys(metrics).length} users`);
         
-        return metrics;
+        // Return both user metrics and hourly data for today
+        return {
+            userMetrics: metrics,
+            hourlyDataToday: hourlyDataToday
+        };
     } catch (error) {
         console.error('Error fetching user metrics:', error);
-        return {};
+        return {
+            userMetrics: {},
+            hourlyDataToday: Array(24).fill(0)
+        };
     }
 }
 
