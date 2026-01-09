@@ -384,10 +384,10 @@ def handle_trust_analytics(query_params, origin=None):
         # Format response
         response = {
             'indicators': {
-                'avgTrustToday': float(today_metrics['avg_trust'] or 0) / 100,  # Convert to 0-1
-                'avgTrustPeriod': float(period_metrics['avg_trust'] or 0) / 100,
-                'percentile80Today': float(today_metrics['p80_trust'] or 0) / 100,
-                'percentile80Period': float(period_metrics['p80_trust'] or 0) / 100,
+                'avgTrustToday': float(today_metrics['avg_trust'] or 0),
+                'avgTrustPeriod': float(period_metrics['avg_trust'] or 0),
+                'percentile80Today': float(today_metrics['p80_trust'] or 0),
+                'percentile80Period': float(period_metrics['p80_trust'] or 0),
                 'highConfidenceRateToday': float(today_metrics['high_rate'] or 0),
                 'highConfidenceRatePeriod': float(period_metrics['high_rate'] or 0)
             },
