@@ -1438,12 +1438,12 @@ function renderQueryLogsPage() {
     
     pageData.forEach(log => {
         const dateStr = moment(log.timestamp).format('DD/MM/YYYY HH:mm:ss');
-        const sessionToken = log.session_token || '-';
+        const bedrockSessionId = log.conversation_id_bedrock || '-';
         
         let rowHtml = `
             <tr id="log-row-${log.id}" style="cursor: pointer;" onclick="openQueryDetailModal('${log.id}')">
                 <td>${dateStr}</td>
-                <td>${sessionToken}</td>
+                <td>${bedrockSessionId}</td>
                 <td>${log.name}</td>
                 <td>${log.team}</td>
                 <td class="query-cell">${log.query}</td>
