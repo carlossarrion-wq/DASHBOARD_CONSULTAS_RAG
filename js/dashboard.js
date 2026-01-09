@@ -1436,7 +1436,6 @@ function renderQueryLogsPage() {
     const pageData = filteredQueryLogsData.slice(startIndex, endIndex);
     
     pageData.forEach(log => {
-        const statusClass = log.status === 'COMPLETED' ? 'status-completed' : 'status-error';
         const dateStr = moment(log.timestamp).format('DD/MM/YYYY HH:mm:ss');
         const sessionToken = log.session_token || '-';
         
@@ -1447,7 +1446,7 @@ function renderQueryLogsPage() {
                 <td>${log.name}</td>
                 <td>${log.team}</td>
                 <td class="query-cell">${log.query}</td>
-                <td><span class="${statusClass}">${log.status}</span></td>
+                <td>${log.status}</td>
                 <td>${log.tokens}</td>
                 <td>${log.responseTime}s</td>
             </tr>
@@ -1528,7 +1527,7 @@ async function openQueryDetailModal(logId) {
     
     const statusSpan = document.getElementById('modal-status');
     statusSpan.textContent = log.status || '-';
-    statusSpan.className = log.status === 'COMPLETED' ? 'status-completed' : 'status-error';
+    statusSpan.className = ''; // Remove badge styling
     
     document.getElementById('modal-streaming-status').textContent = log.streaming_status || 'complete';
     document.getElementById('modal-created-at').textContent = 
