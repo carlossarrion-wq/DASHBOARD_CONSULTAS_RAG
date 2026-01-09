@@ -674,8 +674,12 @@ async function loadDailyTrendChart() {
 async function loadRequestsDetailsTableWithPagination() {
     allRequestsDetailsData = [];
     
-    allUsers.forEach(user => {
-        const name = userNames[user] || 'Unknown';
+    // Iterate over all users that have metrics (from userMetrics)
+    // This ensures we include ALL users who made queries, not just those in allUsers
+    const usersWithMetrics = Object.keys(userMetrics);
+    
+    usersWithMetrics.forEach(user => {
+        const name = userNames[user] || user; // Use user as fallback if name not found
         let team = 'Unknown';
         for (const t in usersByTeam) {
             if (usersByTeam[t].includes(user)) {
